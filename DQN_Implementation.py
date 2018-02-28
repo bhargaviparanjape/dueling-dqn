@@ -75,6 +75,7 @@ class DQN_Agent(object):
 			return action_distribution
 		return greedy_policy
 
+
 	def train(self):
 		# In this function, we will train our network. 
 		# If training without experience replay_memory, then you will interact with the environment 
@@ -201,7 +202,6 @@ def main(args):
 	dqn_agent = Linear_DQN_Agent(environment)
 	dqn_agent.train(args)
 	dqn_agent.test(args)
-
 
 if __name__ == '__main__':
 	main(sys.argv)

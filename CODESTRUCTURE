@@ -1,2 +1,25 @@
-LinearQNetwork
-	forward function:
+QNetwork: Inherits Module
+
+LinearQNetwork: Inherits QNetwork
+	__init__: inputs(gym env??)
+	forward: state vector*linear weight vector => value vector
+
+MLPQNetwork: Inherits QNetwork
+	forward: MLP(s,a) => q 
+
+ConvolutionQNetwork : Inherits QNetwork
+	forward: Conv(s,a) => q
+
+ReplayMemory
+	__init__: inputs(gym env, max_memory)
+	sample_batch
+	append
+
+DQN_Agent
+	__init__: inputs(env) call burn_in_memory
+	greedy_policy:
+	epsilon_greedy_policy:
+	train: q-learning implementation (SGD driver), based on flag decide where to sample from (replay memory or online sampling)
+	test: function to run 20 episodes with some poilicy and return reward (also call Monitor here to plot performance curves and capture video snippet)
+
+

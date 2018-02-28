@@ -4,17 +4,14 @@ import torch
 from torch import autograd
 from torch import nn
 from torch.autograd import Variable
+from torch import FloatTensor, IntTensor
 from torch.nn import functional
+import itertools
+from copy import deepcopy
 
 class QNetwork(nn.Module):
-
-	# This class essentially defines the network architecture. 
-	# The network should take in state of the world as an input, 
-	# and output Q values of the actions available to the agent as the output. 
-
-	def __init__(self, environment_name):
-		# Define your network architecture here. It is also a good idea to define any training operations 
-		# and optimizers here, initialize your variables, or alternately compile your model here.  
+	def __init__(self):
+		super(QNetwork, self).__init__()
 		pass
 
 	def save_model(self, path):
@@ -22,6 +19,17 @@ class QNetwork(nn.Module):
 
 	def load_model(self, path):
 		pass
+
+class LinearQNetwork(QNetwork):
+
+	def __init__(self, input_size, output_size):
+		super(LinearQNetwork, self).__init__()
+		self.linear_layer = nn.Linear(input_size, output_size, bias=False)
+
+
+	def forward(self, input):
+		output = self.linear_layer(input)
+		return output
 
 class Replay_Memory():
 
@@ -44,32 +52,28 @@ class Replay_Memory():
 		# Appends transition to the memory. 	
 		pass
 
-class DQN_Agent():
+class DQN_Agent(object):
+	def __init__(self, environment, render=False):
+		self.env = environment
+		self.nA = environment.action_space.n
 
-	# In this class, we will implement functions to do the following. 
-	# (1) Create an instance of the Q Network class.
-	# (2) Create a function that constructs a policy from the Q values predicted by the Q Network. 
-	#		(a) Epsilon Greedy Policy.
-	# 		(b) Greedy Policy. 
-	# (3) Create a function to train the Q Network, by interacting with the environment.
-	# (4) Create a function to test the Q Network's performance on the environment.
-	# (5) Create a function for Experience Replay.
-	
-	def __init__(self, environment_name, render=False):
+	def get_epsilon_greedy_policy(self, q_network, epsilon):
+		## q_values are Vector
+		def get_epsilon_greedy_policy(state):
+			action_distribution = np.ones(self.nA, dtype=float) * epsilon /self.nA
+			q_values = q_network(state).data.numpy()
+			optimum_action = np.argmax(q_values)
+			action_distribution[optimum_action] += (1.0 - epsilon)
+			return action_distribution
+		return get_epsilon_greedy_policy
 
-		# Create an instance of the network itself, as well as the memory. 
-		# Here is also a good place to set environmental parameters,
-		# as well as training parameters - number of episodes / iterations, etc. 
-
-		pass 
-
-	def epsilon_greedy_policy(self, q_values):
-		# Creating epsilon greedy probabilities to sample from.             
-		pass
-
-	def greedy_policy(self, q_values):
-		# Creating greedy policy for test time. 
-		pass 
+	def get_greedy_policy(self, q_network):
+		def greedy_policy(state):
+			action_distribution = np.zeros(self.nA, dtype=float)
+			q_values = q_network(state).data.numpy()
+			action_distribution[np.argmax(q_values)] = 1
+			return action_distribution
+		return greedy_policy
 
 	def train(self):
 		# In this function, we will train our network. 
@@ -85,17 +89,105 @@ class DQN_Agent():
 		# Here you need to interact with the environment, irrespective of whether you are using a memory.
 		pass
 
-	def burn_in_memory():
+	def burn_in_memory(self):
 		# Initialize your replay memory with a burn_in number of episodes / transitions
 		pass
+
+class Linear_DQN_Agent(DQN_Agent):
+	def __init__(self, environment, render=False):
+		super(Linear_DQN_Agent, self).__init__(environment, render)
+		self.nS = self.env.observation_space.shape[0]
+		self.q_network = LinearQNetwork(self.nS, self.nA)
+		self.greedy_policy = np.ones(self.nA, dtype=float)/self.nA
+		self.target_linear_layer = nn.Linear(self.nS, self.nA, bias=False)
+		## initialize both networks with the same weight
+		# self.target_linear_layer = deepcopy(self.q_network)
+		self.target_linear_layer.load_state_dict(self.q_network.linear_layer.state_dict())
+		self.target_linear_layer.weight.requires_grad = False
+
+
+	def train(self, args):
+
+		## optimizer
+		optimiser = torch.optim.SGD(self.q_network.parameters(), lr=args.learning_rate)
+		## loss criterion
+		criterion = nn.MSELoss()
+		update_count = 0
+
+		for iter in range(args.num_iters):
+			# generate a policy
+			self.e_policy = self.get_epsilon_greedy_policy(self.q_network, args.epsilon)
+			# observe some current state
+			state = self.env.reset()
+			state_variable = Variable(FloatTensor(state))
+
+			for timestep in itertools.count():
+
+				action_distribution = self.e_policy(state_variable)
+				current_action = np.random.choice(a=self.nA, p=action_distribution)
+
+				next_state, reward, terminated, _ = self.env.step(current_action)
+				next_state_variable = Variable(FloatTensor(next_state))
+
+				q_values_current = self.q_network(state_variable)
+				q_values_next = self.target_linear_layer(next_state_variable)
+				td_target = reward + args.discount_factor*torch.max(q_values_next)
+
+				#MSE loss
+				loss = criterion(q_values_current[current_action], td_target)
+				loss.backward()
+				optimiser.step()
+				update_count += 1
+
+				if terminated:
+					print(loss.data[0])
+					break
+
+				state = next_state
+				state_variable = next_state_variable
+
+			'''
+			if iter%args.lazy_update == 0:
+				# iterpolate target linear weights with linear weights
+				# self.target_linear_layer.load_state_dict(args.interpolation_factor*self.target_linear_layer.state_dict() + (1 - args.interpolation_factor)*self.q_network.linear_layer.state_dict())
+				interpolated_dict = self.target_linear_layer.state_dict()
+				interpolated_dict["weight"] = args.interpolation_factor*interpolated_dict["weight"] + (1 - args.interpolation_factor)*self.q_network.linear.state_dict["weight"]
+				# for k,v in self.target_linear_layer.state_dict().items():
+				# 	interpolated_dict[k] = args.interpolation_factor*v + (1 - args.interpolation_factor)*self.q_network.linear.state_dict()[k]
+				self.target_linear_layer.load_state_dict(interpolated_dict)
+				# self.target_linear_layer.weight = deepcopy(args.interpolation_factor*self.target_linear_layer.weight + (1 - args.interpolation_factor)*self.q_network.linear_layer.weight)
+				self.target_linear_layer.weight.requires_grad = False
+				# set current weights to target weights
+				# self.q_network.linear_layer = deepcopy(self.q_network.target_linear_layer)
+				self.q_network.linear_layer.load_state_dict(self.target_linear_layer.state_dict())
+				# self.q_network.linear_layer.weight.requires_grad = True
+			'''
+
+			if iter%args.lazy_update == 0:
+				self.target_linear_layer.state_dict()['weight'] = args.interpolation_factor * self.target_linear_layer.weight + args.interpolation_factor * self.q_network.linear_layer.weight
+				self.target_linear_layer.weight.requires_grad = False
+				self.q_network.linear_layer.load_state_dict(self.target_linear_layer.state_dict())
+
+	def test(self, args, model_file=None):
+		self.greedy_policy = self.get_greedy_policy(self.q_network)
+
+		## for 100 terminating episodes get average reward and print
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
 	parser.add_argument('--experience', dest='experience', default=False, action="store_true")
-	parser.add_argument('--env',dest='env',type=str)
+	parser.add_argument('--env',dest='env',type=str, default="CartPole-v0")
 	parser.add_argument('--render',dest='render',type=int,default=0)
 	parser.add_argument('--train',dest='train',type=int,default=1)
 	parser.add_argument('--model',dest='model_file',type=str)
+	parser.add_argument('--discount_factor', dest='discount_factor', type=float,default=0.99)
+	parser.add_argument('--learning_rate', dest='learning_rate', type=float, default=0.00005)
+	parser.add_argument('--epsilon', dest='epsilon', type=float, default=0.5)
+	parser.add_argument('--num_iters', dest='num_iters', type=int, default=5000)
+	parser.add_argument('--rb_size', dest='rb_size', type=int, default=50000)
+	parser.add_argument('--batch_size', dest='batch_size', type=int, default=32)
+	parser.add_argument('--interpolation_factor', dest='interpolation_factor', type=float, default=0.9)
+	parser.add_argument('--lazy_update', dest='lazy_update', type=float, default=10)
 	return parser.parse_args()
 
 def main(args):
@@ -103,7 +195,13 @@ def main(args):
 	args = parse_arguments()
 	environment_name = args.env
 
-	# You want to create an instance of the DQN_Agent class here, and then train / test it. 
+	environment = gym.make(environment_name)
+	environment.reset()
+
+	dqn_agent = Linear_DQN_Agent(environment)
+	dqn_agent.train(args)
+	dqn_agent.test(args)
+
 
 if __name__ == '__main__':
 	main(sys.argv)

@@ -14,6 +14,7 @@ from itertools import count
 import torch.optim as optim
 import torch
 from collections import deque
+from collections import namedtuple
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -88,10 +89,12 @@ class DQN_Agent():
         #if torch.cuda.is_available():
         #    self.model.cuda()
         
-        self.loss_function = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters())
         self.transition = namedtuple('transition', ('state', 'action', 'reward', 
                                                     'next_state', 'is_terminal'))
+    
+    def loss_function(self, pred, target):
+        return torch.sum((pred - target)**2) / pred.data.nelement()
 
     def epsilon_greedy_policy(self, qvalues, eps_start = 0.9, eps_end = 0.05, eps_decay = 1e6):
         # Epsilon greedy probabilities to sample from.
@@ -112,11 +115,12 @@ class DQN_Agent():
         action = qvalues.data.max(0)[1]
         return action[0]
 
-    def train(self, exp_replay=False, model_file=None):
+    def train(self, exp_replay=False, model_save=None):
         
         print ('*'*80)
         print ('Training.......')
         print ('*'*80)
+        t_counter = deque(maxlen=10)
         for episode in range(1,self.num_episodes+1):
             cur_state = self.env.reset()
             for t in count():
@@ -125,25 +129,27 @@ class DQN_Agent():
                 #    state_var.cuda()
                 qvalues = self.model(state_var)
                 action = self.epsilon_greedy_policy(qvalues)
-                prediction = qvalues.max(0)[0].view(1, 1)
+                prediction = qvalues.max(0)[0]
                 next_state, reward, done, _ = self.env.step(action)
                 
-                next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
+                next_state_var = Variable(torch.FloatTensor(next_state))
                 #if torch.cuda.is_available:
                 #    next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
-                target = reward + self.gamma* nqvalues.max(0)[0].view(1, 1)
+                target = reward + self.gamma* nqvalues.max(0)[0]
                 
                 loss = self.loss_function(prediction, target)
                 self.optimizer.zero_grad()
                 loss.backward()
-                for param in self.model.parameters():
-                    param.grad.data.clamp_(-1, 1)
                 self.optimizer.step()
                 cur_state = next_state
                 if done:
-                    print('Episode %06d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
+                    t_counter.append(t)
+                    if episode % 100 == 0:
+                        print('Episode %06d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
                     break
+            if 
+                self.model.save_model(model_save)
         print ('*'*80)
         print ('Training Complete')
         print ('*'*80)
@@ -170,6 +176,7 @@ def parse_arguments():
     parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
     parser.add_argument('--render', dest='render', type=int, default=0)
     parser.add_argument('--train', dest='train', type=int, default=1)
+    parser.add_argument('--epochs', dest='num_episodes', type=int, default=60000)
     parser.add_argument('--load', dest='model_load', type=str, default=None)
     return parser.parse_args()
 
@@ -180,11 +187,10 @@ def main(args):
 
     # You want to create an instance of the DQN_Agent class here, and then train / test it
     usenetwork = 'linear'
-    agent = DQN_Agent(environment_name, network=usenetwork)
+    agent = DQN_Agent(environment_name, network=usenetwork, num_episodes = args.num_episodes)
     if args.train:
-        agent.train()
         model_save = os.path.join('saved_models',usenetwork+'_'+environment_name)
-        agent.model.save_model(model_save)
+        agent.train(model_save = model_save)
     elif os.path.exists(model_load):
         model_load = args.model_load
         agent.model = agent.model.load_model(model_load)

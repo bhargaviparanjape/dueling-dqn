@@ -82,8 +82,8 @@ class DQN_Agent():
         if network=='linear':
             self.model = linearQNetwork(self.env)
 
-        if torch.cuda.is_available():
-            self.model.cuda()
+        #if torch.cuda.is_available():
+        #    self.model.cuda()
         
         self.loss_function = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters())
@@ -92,7 +92,7 @@ class DQN_Agent():
         # Epsilon greedy probabilities to sample from.
         
         sample = random.random()
-        eps_threshold = eps_start + (eps_end - eps_start) * (self.num_iter / eps_decay)
+        eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * self.num_iter / eps_decay)
         self.num_iter += 1
         if sample > eps_threshold:
             print 
@@ -116,16 +116,16 @@ class DQN_Agent():
             cur_state = self.env.reset()
             for t in count():
                 state_var = Variable(torch.FloatTensor(cur_state))
-                if torch.cuda.is_available:
-                    state_var.cuda()
+                #if torch.cuda.is_available:
+                #    state_var.cuda()
                 qvalues = self.model(state_var)
                 action = self.epsilon_greedy_policy(qvalues)
                 prediction = qvalues.max(0)[0].view(1, 1)
                 next_state, reward, done, _ = self.env.step(action)
                 
-                next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
-                if torch.cuda.is_available:
-                    next_state_var.cuda()
+                next_state_var = Variable(torch.FloatTensor(next_state),volatile=True)
+                #if torch.cuda.is_available:
+                #    next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
                 target = reward + self.gamma* nqvalues.max(0)[0].view(1, 1)
                 
@@ -172,7 +172,7 @@ def main(args):
     agent = DQN_Agent(environment_name, network=usenetwork)
     if args.train:
         agent.train()
-        model_save = os.path.join('saved_models',usenetwork+'_'+environment_name)
+        model_save = os.path.join('saved_models', usenetwork+'_'+environment_name)
         agent.model.save_model(model_save)
     elif os.path.exists(model_load):
         model_load = args.model_load
@@ -180,4 +180,3 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
-

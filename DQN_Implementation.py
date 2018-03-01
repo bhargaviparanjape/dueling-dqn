@@ -41,6 +41,23 @@ class linearQNetwork(baseQNetwork):
         output = self.linear(input_state)
         return output
     
+class mlpQNetwork(baseQNetwork):
+    def __init__(self, env, hidden1=16, hidden2=16):
+        super(mlpQNetwork, self).__init__(env)
+        self.hidden1 = hidden1
+        self.hidden2 = hidden2
+        self.linear1 = nn.Linear(self.input_size, self.hidden1)
+        self.linear2 = nn.Linear(self.hidden1, self.hidden2)
+        self.linear3 = nn.Linear(self.hidden2, self.output_size)
+    
+    def forward(self, input_state):
+        hidden1 = self.linear1(input_state)
+        hidden1 = nn.functional.relu(hidden1)
+        hidden2 = self.linear2(hidden1)
+        hidden2 = nn.functional.relu(hidden2)
+        output = self.linear3(hidden2)
+        return output
+    
 class Replay_Memory():
 
     def __init__(self, memory_size=50000, burn_in=10000):
@@ -76,18 +93,22 @@ class DQN_Agent():
     # (4) Create a function to test the Q Network's performance on the environment.
     # (5) Create a function for Experience Replay.
 
-    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000): 
+    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000, use_cuda=False): 
         
         self.env = gym.make(env_name)
+        self.env_name = env_name
         self.num_episodes = num_episodes
         self.num_iter = 0
         self.gamma = gamma
+        self.use_cuda = use_cuda
         
         if network=='linear':
             self.model = linearQNetwork(self.env)
-
-        #if torch.cuda.is_available():
-        #    self.model.cuda()
+        elif network=='mlp':
+            self.model = mlpQNetwork(self.env)
+        
+        if self.use_cuda and torch.cuda.is_available():
+            self.model.cuda()
         
         self.optimizer = optim.Adam(self.model.parameters())
         self.transition = namedtuple('transition', ('state', 'action', 'reward', 
@@ -114,6 +135,14 @@ class DQN_Agent():
         
         action = qvalues.data.max(0)[1]
         return action[0]
+    
+    def save_criteria(self, t_counter):
+        # Greedy policy for test time.
+        
+        if self.env_name == 'CartPole-v0':
+            return min(t_counter)==199
+        else:
+            return False
 
     def train(self, exp_replay=False, model_save=None):
         
@@ -125,16 +154,16 @@ class DQN_Agent():
             cur_state = self.env.reset()
             for t in count():
                 state_var = Variable(torch.FloatTensor(cur_state))
-                #if torch.cuda.is_available:
-                #    state_var.cuda()
+                if self.use_cuda and torch.cuda.is_available():
+                    state_var = state_var.cuda()
                 qvalues = self.model(state_var)
                 action = self.epsilon_greedy_policy(qvalues)
                 prediction = qvalues.max(0)[0]
                 next_state, reward, done, _ = self.env.step(action)
                 
                 next_state_var = Variable(torch.FloatTensor(next_state))
-                #if torch.cuda.is_available:
-                #    next_state_var.cuda()
+                if self.use_cuda and torch.cuda.is_available():
+                    next_state_var = next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
                 target = reward + self.gamma* nqvalues.max(0)[0]
                 
@@ -145,21 +174,38 @@ class DQN_Agent():
                 cur_state = next_state
                 if done:
                     t_counter.append(t)
-                    if episode % 100 == 0:
-                        print('Episode %06d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
+                    if episode % 1 == 0:
+                        print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
                     break
-            if 
+            if self.save_criteria(t_counter):
+                print ('*'*80)
+                print ('Saving Best Model')
+                print ('*'*80)
                 self.model.save_model(model_save)
         print ('*'*80)
         print ('Training Complete')
         print ('*'*80)
         return
 
-    def test(self, model_file=None):
-        # Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards 
-        # for the 100 episodes. Here you need to interact with the environment, irrespective of whether
-        # you are using a memory.
-        pass
+    def test(self, num_episodes = 100):
+        print ('*'*80)
+        print ('Testing Performance.......')
+        print ('*'*80)
+        for episode in range(1,num_episodes+1):
+            cur_state = self.env.reset()
+            episode_reward = 0
+            for t in count():
+                state_var = Variable(torch.FloatTensor(cur_state))
+                if self.use_cuda and torch.cuda.is_available():
+                    state_var = state_var.cuda()
+                qvalues = self.model(state_var)
+                action = self.greedy_policy(qvalues)
+                next_state, reward, done, _ = self.env.step(action)
+                cur_state = next_state
+                episode_reward += reward
+                if done:
+                    print('Episode %07d : Steps = %03d, Reward = %.2f' %(episode,t,episode_reward))
+                    break
         
     def burn_in_memory():
         # Initialize your replay memory with a burn_in number of episodes / transitions.
@@ -176,7 +222,8 @@ def parse_arguments():
     parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
     parser.add_argument('--render', dest='render', type=int, default=0)
     parser.add_argument('--train', dest='train', type=int, default=1)
-    parser.add_argument('--epochs', dest='num_episodes', type=int, default=60000)
+    parser.add_argument('--network', dest='network', type=str, default='mlp')
+    parser.add_argument('--epochs', dest='num_episodes', type=int, default=80000)
     parser.add_argument('--load', dest='model_load', type=str, default=None)
     return parser.parse_args()
 
@@ -186,14 +233,15 @@ def main(args):
     environment_name = args.env
 
     # You want to create an instance of the DQN_Agent class here, and then train / test it
-    usenetwork = 'linear'
+    usenetwork = args.network
     agent = DQN_Agent(environment_name, network=usenetwork, num_episodes = args.num_episodes)
     if args.train:
         model_save = os.path.join('saved_models',usenetwork+'_'+environment_name)
         agent.train(model_save = model_save)
-    elif os.path.exists(model_load):
+    elif os.path.exists(args.model_load):
         model_load = args.model_load
-        agent.model = agent.model.load_model(model_load)
+        agent.model.load_model(model_load)
+        agent.test()
 
 if __name__ == '__main__':
     main(sys.argv)

@@ -13,6 +13,7 @@ import math
 from itertools import count
 import torch.optim as optim
 import torch
+from collections import deque
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -49,17 +50,19 @@ class Replay_Memory():
         # Burn in episodes define the number of episodes that are written into the memory from the 
         # randomly initialized agent. Memory size is the maximum size after which old elements in 
         # the memory are replaced. A simple (if not the most efficient) was to implement the memory 
-        # is as a list of transitions. 
-        pass
+        # is as a list of transitions.
+        self.memory_size = memory_size
+        self.burn_in = burn_in
+        self.memory = deque(maxlen=self.memory_size)
 
     def sample_batch(self, batch_size=32):
         # This function returns a batch of randomly sampled transitions - i.e. state, action, reward, 
         # next state, terminal flag tuples. You will feed this to your model to train.
-        pass
+        return random.sample(self.memory, batch_size)
 
     def append(self, transition):
-        # Appends transition to the memory.     
-        pass
+        # Appends transition to the memory.
+        self.memory.append(transition)
 
 class DQN_Agent():
 
@@ -82,13 +85,15 @@ class DQN_Agent():
         if network=='linear':
             self.model = linearQNetwork(self.env)
 
-        if torch.cuda.is_available():
-            self.model.cuda()
+        #if torch.cuda.is_available():
+        #    self.model.cuda()
         
         self.loss_function = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters())
+        self.transition = namedtuple('transition', ('state', 'action', 'reward', 
+                                                    'next_state', 'is_terminal'))
 
-    def epsilon_greedy_policy(self, qvalues, eps_start = 0.5, eps_end = 0.05, eps_decay = 1e6):
+    def epsilon_greedy_policy(self, qvalues, eps_start = 0.9, eps_end = 0.05, eps_decay = 1e6):
         # Epsilon greedy probabilities to sample from.
         
         sample = random.random()
@@ -116,16 +121,16 @@ class DQN_Agent():
             cur_state = self.env.reset()
             for t in count():
                 state_var = Variable(torch.FloatTensor(cur_state))
-                if torch.cuda.is_available:
-                    state_var.cuda()
+                #if torch.cuda.is_available:
+                #    state_var.cuda()
                 qvalues = self.model(state_var)
                 action = self.epsilon_greedy_policy(qvalues)
                 prediction = qvalues.max(0)[0].view(1, 1)
                 next_state, reward, done, _ = self.env.step(action)
                 
                 next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
-                if torch.cuda.is_available:
-                    next_state_var.cuda()
+                #if torch.cuda.is_available:
+                #    next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
                 target = reward + self.gamma* nqvalues.max(0)[0].view(1, 1)
                 
@@ -137,7 +142,7 @@ class DQN_Agent():
                 self.optimizer.step()
                 cur_state = next_state
                 if done:
-                    print('Episode %d : Loss = %f, Steps = %d' %(episode,loss,t))
+                    print('Episode %06d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
                     break
         print ('*'*80)
         print ('Training Complete')
@@ -152,11 +157,17 @@ class DQN_Agent():
         
     def burn_in_memory():
         # Initialize your replay memory with a burn_in number of episodes / transitions.
-        pass
+        self.replay = Replay_Memory()
+        state = self.env.reset()
+        while len(self.replay.memory) < self.replay.burnin:
+            action = self.env.action_space.sample()
+            next_state, reward, done, _ = self.env.step(action)
+            self.replay.append(self.transition(state, action, next_state, reward, done))
+            state = next_state
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
-    parser.add_argument('--env', dest='env', type=str, default='MountainCar-v0')
+    parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
     parser.add_argument('--render', dest='render', type=int, default=0)
     parser.add_argument('--train', dest='train', type=int, default=1)
     parser.add_argument('--load', dest='model_load', type=str, default=None)

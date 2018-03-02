@@ -94,8 +94,8 @@ class DQN_Agent():
     # (4) Create a function to test the Q Network's performance on the environment.
     # (5) Create a function for Experience Replay.
 
-    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000, 
-                 use_cuda=False, transfer_every=1): 
+    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 15000, 
+                 use_cuda=False, transfer_every=1, lrate=0.0001): 
         
         self.env_name = env_name
         self.env = gym.make(env_name)
@@ -112,17 +112,12 @@ class DQN_Agent():
         elif network=='mlp':
             self.model = mlpQNetwork(self.env)
         
-        #self.target_model = copy.deepcopy(self.model)
         if self.use_cuda and torch.cuda.is_available():
             self.model.cuda()
-            #self.target_model.cuda()
         
-        self.optimizer = optim.Adam(self.model.parameters())
-        self.transition = namedtuple('transition', ('state', 'action', 'reward', 
-                                                    'next_state', 'is_terminal'))
-    
-    def loss_function_alt(self, pred, target):
-        return torch.sum((pred - target)**2) / pred.data.nelement()
+        self.optimizer = optim.Adam(self.model.parameters(), lr = lrate)
+        self.transition = namedtuple('transition', ('state', 'action', 'next_state', 
+                                                    'reward', 'is_terminal'))
 
     def epsilon_greedy_policy(self, qvalues, eps_start = 0.9, eps_end = 0.05, eps_decay = 1e6):
         # Epsilon greedy probabilities to sample from.
@@ -150,14 +145,73 @@ class DQN_Agent():
             return min(t_counter)>195
         elif self.env_name == 'MountainCar-v0':
             return False
-
-    def train(self, exp_replay=False, model_save=None, verbose = False, eval_every = 10000):
+    
+    def update_model(self, next_state, reward, qvalues, done):
         
+        prediction = qvalues.max(0)[0]
+        
+        next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
+        if self.use_cuda and torch.cuda.is_available():
+            next_state_var = next_state_var.cuda()
+        
+        nqvalues = self.model(next_state_var)
+        nqvalues = nqvalues.max(0)[0]
+        nqvalues.volatile = False
+        
+        target = reward + (1-done)* self.gamma* nqvalues
+        if self.use_cuda and torch.cuda.is_available():
+            target = target.cuda()
+        
+        loss = self.loss_function(prediction, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss
+    
+    def update_model_with_replay(self, batch_size):
+        
+        batch = self.replay.sample_batch(batch_size)
+        batch = self.transition(*zip(*batch))
+        
+        state_batch = Variable(torch.FloatTensor(batch.state))
+        action_batch = Variable(torch.LongTensor(batch.action))
+        
+        if self.use_cuda and torch.cuda.is_available():
+            state_batch = state_batch.cuda()
+            action_batch = action_batch.cuda()
+        prediction = self.model(state_batch).gather(1, action_batch.view(batch_size, 1))
+        
+        target = Variable(torch.zeros(batch_size))
+        next_state_batch = Variable(torch.FloatTensor(batch.next_state),volatile=True)
+        if self.use_cuda and torch.cuda.is_available():
+            next_state_batch = next_state_batch.cuda()
+        nqvalues = self.model(next_state_batch)
+        nqvalues = nqvalues.max(1)[0]
+        nqvalues.volatile = False
+
+        for i in range(batch_size):
+            target[i] = batch.reward[i] + (1 - batch.is_terminal[i])* self.gamma* nqvalues[i]
+        if self.use_cuda and torch.cuda.is_available():
+            target = target.cuda()
+
+        loss = self.loss_function(prediction, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss/batch_size
+    
+
+    def train(self, batch_size =32, exp_replay=False, model_save=None, verbose = False, 
+              eval_every = 10000):
         print ('*'*80)
         print ('Training.......')
         print ('*'*80)
         t_counter = deque(maxlen=10)
         self.update_counter = 1
+        
+        if exp_replay:
+            self.burn_in_memory()
+            
         for episode in range(1,self.num_episodes+1):
             cur_state = self.env.reset()
             for t in count():
@@ -165,30 +219,18 @@ class DQN_Agent():
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
                 qvalues = self.model(state_var)
-                action = self.epsilon_greedy_policy(qvalues)
-                prediction = qvalues.max(0)[0]
+                action = self.epsilon_greedy_policy(qvalues, eps_start =1)
                 next_state, reward, done, _ = self.env.step(action)
                 
-                #target = Variable(torch.zeros(1))
-                next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
-                if self.use_cuda and torch.cuda.is_available():
-                    next_state_var = next_state_var.cuda()
-                nqvalues = self.model(next_state_var)
-                nqvalues = nqvalues.max(0)[0]
-                nqvalues.volatile = False
-                
-                target = reward + (1-done)* self.gamma* nqvalues
-                #target[0] = reward + (1-done)* self.gamma* nqvalues
-                
-                loss = self.loss_function(prediction, target)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                if exp_replay:
+                    self.replay.append(self.transition(cur_state, action, next_state, 
+                                                       reward, done))
+                    loss = self.update_model_with_replay(batch_size)
+                else:
+                    loss = self.update_model(next_state, reward ,qvalues, done)
+                    
                 self.update_counter += 1
                 cur_state = next_state
-                
-                #if self.update_counter% self.transfer_every == 0:
-                #    self.target_model.load_state_dict(self.model.state_dict())
                 
                 if self.update_counter% eval_every == 0:
                     avg_reward = self.test(20, True, self.update_counter/10000, False)
@@ -200,7 +242,7 @@ class DQN_Agent():
                         self.model.save_model(model_save)
                 if done:
                     if verbose and episode % 100 == 0:
-                        print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
+                        print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
                     break
         print ('*'*80)
         print ('Training Complete')
@@ -241,23 +283,28 @@ class DQN_Agent():
         print ('*'*80)
         return episode_reward_list.mean()
         
-    def burn_in_memory():
+    def burn_in_memory(self):
         # Initialize your replay memory with a burn_in number of episodes / transitions.
         self.replay = Replay_Memory()
         state = self.env.reset()
-        while len(self.replay.memory) < self.replay.burnin:
+        while len(self.replay.memory) < self.replay.burn_in:
             action = self.env.action_space.sample()
             next_state, reward, done, _ = self.env.step(action)
             self.replay.append(self.transition(state, action, next_state, reward, done))
-            state = next_state
-
+            if done:
+                state = self.env.reset()
+            else:
+                state = next_state
+    
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
     parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
     parser.add_argument('--render', dest='render', type=int, default=0)
     parser.add_argument('--train', dest='train', type=int, default=1)
+    parser.add_argument('--replay', dest='replay', type=bool, default=False)
+    parser.add_argument('--cuda', dest='use_cuda', type=bool, default=False)
     parser.add_argument('--network', dest='network', type=str, default='mlp')
-    parser.add_argument('--epochs', dest='num_episodes', type=int, default=80000)
+    parser.add_argument('--epochs', dest='num_episodes', type=int, default=20000)
     parser.add_argument('--load', dest='model_load', type=str, default=None)
     return parser.parse_args()
 
@@ -265,13 +312,16 @@ def main(args):
 
     args = parse_arguments()
     environment_name = args.env
+    usenetwork = args.network
+    replay = args.replay
+    use_cuda = args.use_cuda
 
     # You want to create an instance of the DQN_Agent class here, and then train / test it
-    usenetwork = args.network
-    agent = DQN_Agent(environment_name, network=usenetwork, num_episodes = args.num_episodes)
+    agent = DQN_Agent(environment_name, network=usenetwork, num_episodes = args.num_episodes, 
+                      use_cuda =use_cuda, lrate=0.001)
     if args.train:
-        model_save = os.path.join('saved_models',usenetwork+'_'+environment_name)
-        agent.train(model_save = model_save, verbose = True)
+        model_save = os.path.join('saved_models',usenetwork+'_'+environment_name+'_'+str(replay))
+        agent.train(model_save = model_save, exp_replay = replay, verbose = True)
     elif os.path.exists(args.model_load):
         model_load = args.model_load
         agent.model.load_model(model_load)

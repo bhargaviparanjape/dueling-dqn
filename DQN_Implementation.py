@@ -15,6 +15,7 @@ import torch.optim as optim
 import torch
 from collections import deque
 from collections import namedtuple
+import copy
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -93,7 +94,8 @@ class DQN_Agent():
     # (4) Create a function to test the Q Network's performance on the environment.
     # (5) Create a function for Experience Replay.
 
-    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000, use_cuda=False): 
+    def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000, 
+                 use_cuda=False, transfer_every=1): 
         
         self.env_name = env_name
         self.env = gym.make(env_name)
@@ -102,20 +104,24 @@ class DQN_Agent():
         self.num_iter = 0
         self.gamma = gamma
         self.use_cuda = use_cuda
+        self.transfer_every = transfer_every
+        self.loss_function = nn.MSELoss()
         
         if network=='linear':
             self.model = linearQNetwork(self.env)
         elif network=='mlp':
             self.model = mlpQNetwork(self.env)
         
+        #self.target_model = copy.deepcopy(self.model)
         if self.use_cuda and torch.cuda.is_available():
             self.model.cuda()
+            #self.target_model.cuda()
         
         self.optimizer = optim.Adam(self.model.parameters())
         self.transition = namedtuple('transition', ('state', 'action', 'reward', 
                                                     'next_state', 'is_terminal'))
     
-    def loss_function(self, pred, target):
+    def loss_function_alt(self, pred, target):
         return torch.sum((pred - target)**2) / pred.data.nelement()
 
     def epsilon_greedy_policy(self, qvalues, eps_start = 0.9, eps_end = 0.05, eps_decay = 1e6):
@@ -145,7 +151,7 @@ class DQN_Agent():
         elif self.env_name == 'MountainCar-v0':
             return False
 
-    def train(self, exp_replay=False, model_save=None, verbose = False):
+    def train(self, exp_replay=False, model_save=None, verbose = False, eval_every = 10000):
         
         print ('*'*80)
         print ('Training.......')
@@ -163,11 +169,16 @@ class DQN_Agent():
                 prediction = qvalues.max(0)[0]
                 next_state, reward, done, _ = self.env.step(action)
                 
-                next_state_var = Variable(torch.FloatTensor(next_state))
+                #target = Variable(torch.zeros(1))
+                next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
                 if self.use_cuda and torch.cuda.is_available():
                     next_state_var = next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
-                target = reward + self.gamma* nqvalues.max(0)[0]
+                nqvalues = nqvalues.max(0)[0]
+                nqvalues.volatile = False
+                
+                target = reward + (1-done)* self.gamma* nqvalues
+                #target[0] = reward + (1-done)* self.gamma* nqvalues
                 
                 loss = self.loss_function(prediction, target)
                 self.optimizer.zero_grad()
@@ -175,7 +186,11 @@ class DQN_Agent():
                 self.optimizer.step()
                 self.update_counter += 1
                 cur_state = next_state
-                if self.update_counter%10000 == 0:
+                
+                #if self.update_counter% self.transfer_every == 0:
+                #    self.target_model.load_state_dict(self.model.state_dict())
+                
+                if self.update_counter% eval_every == 0:
                     avg_reward = self.test(20, True, self.update_counter/10000, False)
                     t_counter.append(avg_reward)
                     if self.save_criteria(t_counter):

@@ -95,9 +95,9 @@ class DQN_Agent():
 
     def __init__(self, env_name, network='linear', render = False, gamma=1, num_episodes = 5000, use_cuda=False): 
         
-	self.env_name = env_name
+        self.env_name = env_name
         self.env = gym.make(env_name)
-	self.test_env = gym.make(env_name)
+        self.test_env = gym.make(env_name)
         self.num_episodes = num_episodes
         self.num_iter = 0
         self.gamma = gamma
@@ -145,13 +145,13 @@ class DQN_Agent():
         elif self.env_name == 'MountainCar-v0':
             return False
 
-    def train(self, exp_replay=False, model_save=None):
+    def train(self, exp_replay=False, model_save=None, verbose = False):
         
         print ('*'*80)
         print ('Training.......')
         print ('*'*80)
         t_counter = deque(maxlen=10)
-	self.update_counter = 1
+        self.update_counter = 1
         for episode in range(1,self.num_episodes+1):
             cur_state = self.env.reset()
             for t in count():
@@ -164,29 +164,27 @@ class DQN_Agent():
                 next_state, reward, done, _ = self.env.step(action)
                 
                 next_state_var = Variable(torch.FloatTensor(next_state))
-		next_state_var.requires_grad = False
                 if self.use_cuda and torch.cuda.is_available():
                     next_state_var = next_state_var.cuda()
                 nqvalues = self.model(next_state_var)
                 target = reward + self.gamma* nqvalues.max(0)[0]
-		print(target.requires_grad)
-		                
+                
                 loss = self.loss_function(prediction, target)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-		self.update_counter += 1
+                self.update_counter += 1
                 cur_state = next_state
-		if self.update_counter%10000 == 0:
-		    avg_reward = self.test(20, True, self.update_counter/10000, False)
-		    t_counter.append(avg_reward)
-		    if self.save_criteria(t_counter):
-                	print ('*'*80)
-                	print ('Saving Best Model')
-                	print ('*'*80)
-                	self.model.save_model(model_save)
+                if self.update_counter%10000 == 0:
+                    avg_reward = self.test(20, True, self.update_counter/10000, False)
+                    t_counter.append(avg_reward)
+                    if self.save_criteria(t_counter):
+                        print ('*'*80)
+                        print ('Saving Best Model')
+                        print ('*'*80)
+                        self.model.save_model(model_save)
                 if done:
-                    if episode % 100 == 0:
+                    if verbose and episode % 100 == 0:
                         print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t,loss))
                     break
         print ('*'*80)
@@ -198,7 +196,7 @@ class DQN_Agent():
         print ('*'*80)
         print ('Testing Performance.......')
         print ('*'*80)
-	episode_reward_list = []
+        episode_reward_list = []
         for episode in range(1,num_episodes+1):
             cur_state = self.test_env.reset()
             episode_reward = 0
@@ -207,26 +205,26 @@ class DQN_Agent():
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
                 qvalues = self.model(state_var)
-		
-		if eval:
+                
+                if eval:
                     action = self.epsilon_greedy_policy(qvalues, eps_start = 0.05, eps_end = 0.05)
-		else:
+                else:
                     action = self.greedy_policy(qvalues)
 
                 next_state, reward, done, _ = self.test_env.step(action)
                 cur_state = next_state
                 episode_reward += reward
                 if done:
-		    if verbose:
-                    	print('Episode %07d : Steps = %03d, Reward = %.2f' %(episode,t,episode_reward))
-		    episode_reward_list.append(episode_reward)
+                    if verbose:
+                        print('Episode %07d : Steps = %03d, Reward = %.2f' %(episode,t,episode_reward))
+                    episode_reward_list.append(episode_reward)
                     break
-	episode_reward_list = np.array(episode_reward_list)
-	print ('*'*80)
-        print ('Num_Updates(*10000): %03d => Cumulative Reward: Mean= %f, Std= %f'  %(num_updates,
-				episode_reward_list.mean(),episode_reward_list.std()))
+        episode_reward_list = np.array(episode_reward_list)
         print ('*'*80)
-	return episode_reward_list.mean()
+        print ('Num_Updates(*10000): %03d => Cumulative Reward: Mean= %f, Std= %f'  %(num_updates,
+                episode_reward_list.mean(),episode_reward_list.std()))
+        print ('*'*80)
+        return episode_reward_list.mean()
         
     def burn_in_memory():
         # Initialize your replay memory with a burn_in number of episodes / transitions.
@@ -258,7 +256,7 @@ def main(args):
     agent = DQN_Agent(environment_name, network=usenetwork, num_episodes = args.num_episodes)
     if args.train:
         model_save = os.path.join('saved_models',usenetwork+'_'+environment_name)
-        agent.train(model_save = model_save)
+        agent.train(model_save = model_save, verbose = True)
     elif os.path.exists(args.model_load):
         model_load = args.model_load
         agent.model.load_model(model_load)

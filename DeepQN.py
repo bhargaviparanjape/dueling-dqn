@@ -249,31 +249,44 @@ env.reset()
 #    containing the main training loop, and will update after every
 #    episode.
 #
+class MultiLayerQNetwork(nn.Module):
+	def __init__(self, input_size, hidden_size1, hidden_size2, output_size):
+		super(MultiLayerQNetwork, self).__init__()
+		self.mlp_layer = nn.Sequential(torch.nn.Linear(input_size, hidden_size1),
+									   torch.nn.ReLU(),
+									   torch.nn.Linear(hidden_size1, hidden_size2),
+									   torch.nn.ReLU(),
+									   torch.nn.Linear(hidden_size2, output_size))
+
+	def forward(self, input):
+		output = self.mlp_layer(input)
+		return output
 
 class LinearQNetwork(nn.Module):
 
     def __init__(self, input_size, output_size):
         super(LinearQNetwork, self).__init__()
-        self.linear_layer = nn.Linear(input_size, output_size, bias=False)
+        self.linear_layer = nn.Linear(input_size, output_size)
 
 
     def forward(self, input):
         output = self.linear_layer(input)
         return output
 
-BATCH_SIZE = 128
-GAMMA = 0.999
-EPS_START = 0.9
+BATCH_SIZE = 32
+GAMMA = 0.9
+EPS_START = 0.5
 EPS_END = 0.05
-EPS_DECAY = 200
+EPS_DECAY = 1e6
 
-model = LinearQNetwork(env.observation_space.shape[0], env.action_space.n)
+# model = LinearQNetwork(env.observation_space.shape[0], env.action_space.n)
+model = MultiLayerQNetwork(env.observation_space.shape[0], 16, 16, env.action_space.n)
 
 if use_cuda:
     model.cuda()
 
-optimizer = optim.RMSprop(model.parameters())
-memory = ReplayMemory(10000)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+memory = ReplayMemory(50000)
 
 
 steps_done = 0
@@ -282,8 +295,7 @@ steps_done = 0
 def select_action(state):
     global steps_done
     sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
+    eps_threshold = EPS_START + (EPS_END - EPS_START) * (steps_done / EPS_DECAY)
     steps_done += 1
     if sample > eps_threshold:
         return model(
@@ -334,6 +346,7 @@ last_sync = 0
 
 def optimize_model():
     global last_sync
+    global criterion
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
@@ -392,7 +405,7 @@ def optimize_model():
 # Below, `num_episodes` is set small. You should download
 # the notebook and run lot more epsiodes.
 
-num_episodes = 10000
+num_episodes = 100000
 for i_episode in range(num_episodes):
     # Initialize the environment and state
     # env.reset()
@@ -401,6 +414,7 @@ for i_episode in range(num_episodes):
     # state = current_screen - last_screen
     state = env.reset()
     state_variable = FloatTensor(state)
+    criterion = nn.MSELoss()
     for t in count():
         # Select and perform an action
         action = select_action(state_variable)
@@ -424,12 +438,14 @@ for i_episode in range(num_episodes):
 
         # Perform one step of the optimization (on the target network)
         loss  =optimize_model()
-        if loss is not None:
-        	print(loss.data[0])
+
         if done:
             episode_durations.append(t + 1)
+            if loss is not None:
+                print("{0}, {1}, {2}".format(t, loss.data[0], len(memory)))
             # plot_durations()
             break
+
 
 print('Complete')
 # env.render(close=True)

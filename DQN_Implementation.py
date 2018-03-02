@@ -4,7 +4,7 @@ import torch
 from torch import autograd
 from torch import nn
 from torch.autograd import Variable
-from torch import FloatTensor, IntTensor
+from torch import FloatTensor, IntTensor, ByteTensor
 from torch.nn import functional
 import itertools
 from copy import deepcopy
@@ -24,11 +24,26 @@ class LinearQNetwork(QNetwork):
 
 	def __init__(self, input_size, output_size):
 		super(LinearQNetwork, self).__init__()
-		self.linear_layer = nn.Linear(input_size, output_size, bias=False)
+		self.linear_layer = nn.Linear(input_size, output_size)
+		self.relu = nn.ReLU()
 
 
 	def forward(self, input):
-		output = self.linear_layer(input)
+		output1 = self.linear_layer(input)
+		output = self.relu(output1)
+		return output
+
+class MultiLayerQNetwork(nn.Module):
+	def __init__(self, input_size, hidden_size1, hidden_size2, output_size):
+		super(MultiLayerQNetwork, self).__init__()
+		self.mlp_layer = nn.Sequential(torch.nn.Linear(input_size, hidden_size1),
+									   torch.nn.ReLU(),
+									   torch.nn.Linear(hidden_size1, hidden_size2),
+									   torch.nn.ReLU(),
+									   torch.nn.Linear(hidden_size2, output_size))
+
+	def forward(self, input):
+		output = self.mlp_layer(input)
 		return output
 
 class Replay_Memory():
@@ -40,7 +55,7 @@ class Replay_Memory():
 
 		# Burn in episodes define the number of episodes that are written into the memory from the 
 		# randomly initialized agent. Memory size is the maximum size after which old elements in the memory are replaced. 
-		# A simple (if not the most efficient) was to implement the memory is as a list of transitions. 
+		# A simple (if not the most efficient) was to implement the memory is as a list of transitions.
 		pass
 
 	def sample_batch(self, batch_size=32):
@@ -102,7 +117,7 @@ class Linear_DQN_Agent(DQN_Agent):
 		self.greedy_policy = np.ones(self.nA, dtype=float)/self.nA
 		self.target_linear_layer = nn.Linear(self.nS, self.nA, bias=False)
 		## initialize both networks with the same weight
-		# self.target_linear_layer = deepcopy(self.q_network)
+		## self.target_linear_layer = deepcopy(self.q_network)
 		self.target_linear_layer.load_state_dict(self.q_network.linear_layer.state_dict())
 		self.target_linear_layer.weight.requires_grad = False
 
@@ -110,14 +125,15 @@ class Linear_DQN_Agent(DQN_Agent):
 	def train(self, args):
 
 		## optimizer
-		optimiser = torch.optim.SGD(self.q_network.parameters(), lr=args.learning_rate)
+		optimiser = torch.optim.Adam(self.q_network.parameters(), lr=args.learning_rate)
 		## loss criterion
 		criterion = nn.MSELoss()
 		update_count = 0
+		epsilon = args.epsilon_start
 
-		for iter in range(args.num_iters):
+		for iter in range(1, args.num_iters + 1):
 			# generate a policy
-			self.e_policy = self.get_epsilon_greedy_policy(self.q_network, args.epsilon)
+			self.e_policy = self.get_epsilon_greedy_policy(self.q_network, epsilon)
 			# observe some current state
 			state = self.env.reset()
 			state_variable = Variable(FloatTensor(state))
@@ -128,6 +144,7 @@ class Linear_DQN_Agent(DQN_Agent):
 				current_action = np.random.choice(a=self.nA, p=action_distribution)
 
 				next_state, reward, terminated, _ = self.env.step(current_action)
+				update_count += 1
 				next_state_variable = Variable(FloatTensor(next_state))
 
 				q_values_current = self.q_network(state_variable)
@@ -138,13 +155,19 @@ class Linear_DQN_Agent(DQN_Agent):
 				loss = criterion(q_values_current[current_action], td_target)
 				loss.backward()
 				optimiser.step()
-				update_count += 1
+
+
+				if (update_count+1)%args.epsilon_decay_at and epsilon > args.epsilon_end:
+					epsilon = epsilon*args.epsilon_decay_rate
+
+				# parser.add_argument('--record_video', dest='record_video', type=int)
 
 				if terminated:
-					print(loss.data[0])
+					print("Q-function Loss at the end of episode: {0}".format(loss.data[0]))
+					print("Length of episode: {0}".format(timestep))
 					break
 
-				state = next_state
+				#state = next_state
 				state_variable = next_state_variable
 
 			'''
@@ -164,14 +187,120 @@ class Linear_DQN_Agent(DQN_Agent):
 				# self.q_network.linear_layer.weight.requires_grad = True
 			'''
 
+			if iter == args.num_iters%4 or iter == 1:
+				print("recording video")
+
 			if iter%args.lazy_update == 0:
 				self.target_linear_layer.state_dict()['weight'] = args.interpolation_factor * self.target_linear_layer.weight + args.interpolation_factor * self.q_network.linear_layer.weight
 				self.target_linear_layer.weight.requires_grad = False
 				self.q_network.linear_layer.load_state_dict(self.target_linear_layer.state_dict())
 
-	def test(self, args, model_file=None):
-		self.greedy_policy = self.get_greedy_policy(self.q_network)
+class MLP_DQN_Agent(DQN_Agent):
+	def __init__(self, environment, render=False):
+		super(MLP_DQN_Agent, self).__init__(environment, render)
+		self.nS = self.env.observation_space.shape[0]
+		self.q_network = MultiLayerQNetwork(self.nS, 16, 16, self.nA)
+		self.greedy_policy = np.ones(self.nA, dtype=float) / self.nA
+		# self.target = MultiLayerQNetwork(self.nS, 16, 16, self.nA)
+		## initialize both networks with the same weight
+		## self.target_linear_layer = deepcopy(self.q_network)
+		# self.target.load_state_dict(self.q_network.state_dict())
+		# self.target.mlp_layer.weight.requires_grad = False
 
+	def train(self, args):
+
+		## optimizer
+		optimiser = torch.optim.Adam(self.q_network.parameters(), lr=args.learning_rate)
+		## loss criterion
+		criterion = nn.MSELoss()
+		update_count = 0
+		epsilon = args.epsilon_start
+
+		for iter in range(1, args.num_iters + 1):
+			# generate a policy
+			self.e_policy = self.get_epsilon_greedy_policy(self.q_network, epsilon)
+			# observe some current state
+			state = self.env.reset()
+			state_variable = Variable(FloatTensor(state))
+
+			for timestep in itertools.count():
+
+				action_distribution = self.e_policy(state_variable)
+				current_action = np.random.choice(a=self.nA, p=action_distribution)
+
+				next_state, reward, terminated, _ = self.env.step(current_action)
+				update_count += 1
+
+
+				q_values_current = self.q_network(state_variable)
+				# non_final_mask = ByteTensor([terminated])
+				self.q_network.train(False)
+				next_state_variable = Variable(FloatTensor(next_state))
+				q_values_next = Variable(torch.zeros(self.nA).type(FloatTensor))
+				q_values_next = self.q_network(next_state_variable)
+				# q_values_next
+				td_target = reward + args.discount_factor * torch.max(q_values_next)
+				self.q_network.train(True)
+				# MSE loss
+				loss = criterion(q_values_current[current_action], td_target)
+				loss.backward()
+				optimiser.step()
+
+				if (update_count + 1) % args.epsilon_decay_at and epsilon > args.epsilon_end:
+					epsilon = epsilon * args.epsilon_decay_rate
+
+				# parser.add_argument('--record_video', dest='record_video', type=int)
+
+				if terminated:
+					print("Q-function Loss at the end of episode: {0}".format(loss.data[0]))
+					print("Length of episode: {0}".format(timestep))
+					break
+
+				# state = next_state
+				state_variable = next_state_variable
+
+			'''
+			if iter%args.lazy_update == 0:
+				# iterpolate target linear weights with linear weights
+				# self.target_linear_layer.load_state_dict(args.interpolation_factor*self.target_linear_layer.state_dict() + (1 - args.interpolation_factor)*self.q_network.linear_layer.state_dict())
+				interpolated_dict = self.target_linear_layer.state_dict()
+				interpolated_dict["weight"] = args.interpolation_factor*interpolated_dict["weight"] + (1 - args.interpolation_factor)*self.q_network.linear.state_dict["weight"]
+				# for k,v in self.target_linear_layer.state_dict().items():
+				# 	interpolated_dict[k] = args.interpolation_factor*v + (1 - args.interpolation_factor)*self.q_network.linear.state_dict()[k]
+				self.target_linear_layer.load_state_dict(interpolated_dict)
+				# self.target_linear_layer.weight = deepcopy(args.interpolation_factor*self.target_linear_layer.weight + (1 - args.interpolation_factor)*self.q_network.linear_layer.weight)
+				self.target_linear_layer.weight.requires_grad = False
+				# set current weights to target weights
+				# self.q_network.linear_layer = deepcopy(self.q_network.target_linear_layer)
+				self.q_network.linear_layer.load_state_dict(self.target_linear_layer.state_dict())
+				# self.q_network.linear_layer.weight.requires_grad = True
+			'''
+
+			if iter == args.num_iters % 4 or iter == 1:
+				print("recording video")
+
+			# if iter % args.lazy_update == 0:
+			# 	self.target.mlp_layer.state_dict()[
+			# 		'weight'] = args.interpolation_factor * self.target.mlp_layer.weight + args.interpolation_factor * self.q_network.mlp_layer.weight
+			# 	# self.target.weight.requires_grad = False
+			# 	self.q_network.load_state_dict(self.target.state_dict())
+
+	def test(self, args, model_file=None):
+		#self.e_policy is the online policy, dont use for evaluation??
+		epsilon_greedy_policy = self.get_epsilon_greedy_policy(self.q_network, args.epsilon_test)
+		average_reward = 0
+		for iter in range(100):
+			reward_per_episode = 0
+			start_state = self.env.reset()
+			for timestep in itertools.count():
+				action_distribution = self.g_policy(start_state)
+				# picktop
+				action= np.random.choice(a=self.nA, p=action_distribution)
+				next_state, reward, terminated, _ = self.env.step(action)
+				reward_per_episode += reward
+			average_reward += reward_per_episode
+		average_reward = float(average_reward)/100
+		print("Average reward per episode: {0}".format(average_reward))
 		## for 100 terminating episodes get average reward and print
 
 def parse_arguments():
@@ -183,8 +312,12 @@ def parse_arguments():
 	parser.add_argument('--model',dest='model_file',type=str)
 	parser.add_argument('--discount_factor', dest='discount_factor', type=float,default=0.99)
 	parser.add_argument('--learning_rate', dest='learning_rate', type=float, default=0.00005)
-	parser.add_argument('--epsilon', dest='epsilon', type=float, default=0.5)
-	parser.add_argument('--num_iters', dest='num_iters', type=int, default=5000)
+	parser.add_argument('--epsilon_test', dest='epsilon_test', type=float, default=0.05)
+	parser.add_argument('--epsilon_start', dest='epsilon_start', type=float, default=0.5)
+	parser.add_argument('--epsilon_end', dest='epsilon_end', type=float, default=0.05)
+	parser.add_argument('--epsilon_decay_at', dest='epsilon_decay_at', type=float, default=10000)
+	parser.add_argument('--epsilon_decay_rate', dest='epsilon_decay_rate', type=float, default=0.1)
+	parser.add_argument('--num_iters', dest='num_iters', type=int, default=10000)
 	parser.add_argument('--rb_size', dest='rb_size', type=int, default=50000)
 	parser.add_argument('--batch_size', dest='batch_size', type=int, default=32)
 	parser.add_argument('--interpolation_factor', dest='interpolation_factor', type=float, default=0.9)
@@ -199,9 +332,9 @@ def main(args):
 	environment = gym.make(environment_name)
 	environment.reset()
 
-	dqn_agent = Linear_DQN_Agent(environment)
+	dqn_agent = MLP_DQN_Agent(environment)
 	dqn_agent.train(args)
-	dqn_agent.test(args)
+	# dqn_agent.test(args)
 
 if __name__ == '__main__':
 	main(sys.argv)

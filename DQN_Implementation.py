@@ -18,6 +18,7 @@ from collections import deque
 from collections import namedtuple
 import copy
 from parameters import *
+import cv2
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -65,17 +66,21 @@ class mlpQNetwork(baseQNetwork):
 
 class convQNetwork(baseQNetwork):
     def __init__(self, env):
-        super(mlpQNetwork, self).__init__(env)
+        super(convQNetwork, self).__init__(env)
         self.output_size = self.env.action_space.n
         self.conv1 = nn.Conv2d(4, 16, kernel_size=8, stride=4)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
-        self.linear = nn.Linear(448, self.output_size)
+        self.linear1 = nn.Linear(2592, 256)
+        self.linear2 = nn.Linear(256, self.output_size)
 
     def forward(self, input_state):
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
+        x1 = F.relu(self.bn1(self.conv1(input_state)))
+        x2 = F.relu(self.bn2(self.conv2(x1)))
+        x3 = F.relu(self.linear1(x2.view(x2.shape[0],-1)))
+        x4 = self.linear2(x3)
+        return x4
         
 class Replay_Memory():
 
@@ -112,9 +117,9 @@ class DQN_Agent():
             self.model = linearQNetwork(self.env)
         elif self.network=='mlp':
             self.model = mlpQNetwork(self.env)
-        elif self.agent=='doubledqn' and self.network=='conv':
+        elif self.network=='conv' and self.agent=='doubledqn':
             self.model = convQNetwork(self.env)
-        elif self.agent=='duellingdqn' and self.network=='mlp':
+        elif self.network=='mlp' and self.agent=='duellingdqn':
             raise NotImplementedError()
         else:
             raise NotImplementedError()
@@ -143,13 +148,13 @@ class DQN_Agent():
         else: 
             eps_threshold = self.get_epsilon(update_counter)
         if sample > eps_threshold:
-            action = qvalues.data.max(0)[1]
+            action = qvalues.data.max(1)[1]
         else:
             action = torch.LongTensor([random.randrange(self.model.output_size)])
         return action[0]
 
     def greedy_policy(self, qvalues):
-        action = qvalues.data.max(0)[1]
+        action = qvalues.data.max(1)[1]
         return action[0]
     
     def early_stop(self, t_counter):
@@ -157,16 +162,19 @@ class DQN_Agent():
             return min(t_counter)==200
         elif self.env_name == 'MountainCar-v0':
             return False
+        elif self.env_name == 'SpaceInvaders-v0':
+            return False
     
     def update_model(self, next_state, reward, qvalues, done):
         
-        prediction = qvalues.max(0)[0]
-        next_state_var = Variable(torch.FloatTensor(next_state), volatile=True)
+        prediction = qvalues.max(1)[0]
+        next_state_var = Variable(torch.FloatTensor(next_state).unsqueeze(0), 
+                                  volatile=True)
         if self.use_cuda and torch.cuda.is_available():
             next_state_var = next_state_var.cuda()
         
         nqvalues = self.model(next_state_var)
-        nqvalues = nqvalues.max(0)[0]
+        nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
         
         target = reward + (1-done)* self.gamma* nqvalues
@@ -194,6 +202,7 @@ class DQN_Agent():
         
         target = Variable(torch.zeros(batch_size))
         next_state_batch = Variable(torch.FloatTensor(batch.next_state),volatile=True)
+        
         if self.use_cuda and torch.cuda.is_available():
             next_state_batch = next_state_batch.cuda()
         nqvalues = self.model(next_state_batch)
@@ -211,6 +220,18 @@ class DQN_Agent():
         self.optimizer.step()
         return loss/batch_size
     
+    def get_frames(self, cur_frame, previous_frames=None):
+        num_frames = self.paramdict['num_frames'] 
+
+        cur_frame= cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
+        cur_frame = cv2.resize(cur_frame,(84, 84))
+        if previous_frames is None:
+            final_frame = np.array([cur_frame]*num_frames).astype('float64')
+        else:
+            final_frame = np.zeros(previous_frames.shape)
+            final_frame[:num_frames-1] = previous_frames[1:]
+            final_frame[num_frames-1] = cur_frame
+        return final_frame
 
     def train(self, verbose = False, trial=False):
         
@@ -235,13 +256,18 @@ class DQN_Agent():
             
         for episode in range(1,self.num_episodes+1):
             cur_state = self.env.reset()
+            if self.network == 'conv':
+                cur_state = self.get_frames(cur_state)
+            
             for t in count():
-                state_var = Variable(torch.FloatTensor(cur_state))
+                state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
                 qvalues = self.model(state_var)
                 action = self.epsilon_greedy_policy(qvalues, update_counter)
                 next_state, reward, done, _ = self.env.step(action)
+                if self.network == 'conv':
+                    next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
                 
                 if self.exp_replay=='exp':
                     self.replay.append(self.transition(cur_state, action, next_state, 
@@ -291,9 +317,11 @@ class DQN_Agent():
         episode_reward_list = []
         for episode in range(1,num_test_episodes+1):
             cur_state = self.test_env.reset()
+            if self.network == 'conv':
+                cur_state = self.get_frames(cur_state)
             episode_reward = 0
             for t in count():
-                state_var = Variable(torch.FloatTensor(cur_state))
+                state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
                 qvalues = self.model(state_var)
@@ -302,6 +330,8 @@ class DQN_Agent():
                 else:
                     action = self.greedy_policy(qvalues)
                 next_state, reward, done, _ = self.test_env.step(action)
+                if self.network == 'conv':
+                    next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
                 cur_state = next_state
                 episode_reward += reward
                 if done:
@@ -323,25 +353,29 @@ class DQN_Agent():
         
     def burn_in_memory(self):
         # Initialize your replay memory with a burn_in number of episodes / transitions.
-        self.replay = Replay_Memory()
+        memory_size = self.paramdict['memory_size']
+        self.replay = Replay_Memory(memory_size= memory_size)
         state = self.env.reset()
+        if self.network == 'conv':
+            state = self.get_frames(state)
         while len(self.replay.memory) < self.replay.burn_in:
             action = self.env.action_space.sample()
             next_state, reward, done, _ = self.env.step(action)
+            if self.network == 'conv':
+                next_state = self.get_frames(cur_frame=next_state, previous_frames=state)
+
             self.replay.append(self.transition(state, action, next_state, reward, done))
             if done:
                 state = self.env.reset()
+                if self.network == 'conv':
+                    state = self.get_frames(state)
             else:
                 state = next_state
+        print('*'*80)
+        print('Memory Burn In Complete')
+        print('*'*80)
 
-class DoubleDQN_Agent(DQN_Agent):
-    def __init__(self, env_name, network, exp_replay, paramdict, render = False, use_cuda=False):
-        super(DoubleDQN_Agent, self).__init__(env_name, network, exp_replay, paramdict)
-        if network == 'conv':
-            self.model = convQNetwork(self.env, self.paramdict)
             
-    
-    
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
     parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
@@ -366,9 +400,15 @@ def main(args):
     is_trial = args.trial
     model_load = args.model_load
     run = args.run
+    
+    model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run]))
+    if args.train and not is_trial and os.path.exists(model_location):
+        print('A model with same specifications exist')
+        print(os.listdir('saved_models'))
+        print('This will overwrite the model')
+        run = raw_input("Re-Enter the Run Number to avoid Conflict: ")
+    
     paramdict = get_parameters(env_name, network, replay, agent, run)
-
-    # You want to create an instance of the DQN_Agent class here, and then train / test it
     dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, 
                           agent= agent, paramdict = paramdict, use_cuda = use_cuda)
 
@@ -379,4 +419,5 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
+
 

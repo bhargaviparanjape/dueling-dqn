@@ -130,12 +130,10 @@ class DQN_Agent():
         
         if eps_strat=='linear_decay':
             eps_threshold = eps_start + (eps_end - eps_start) * min((update_counter/eps_decay),1)
-            
-        if eps_strat=='exp_decay':
-            eps_decay= esp_decay/100
+        elif eps_strat=='exp_decay':
+            eps_decay= eps_decay/100
             eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.*update_counter/eps_decay)
-        
-        if eps_strat=='log_decay':
+        elif eps_strat=='log_decay':
             raise NotImplementedError()
             
     def epsilon_greedy_policy(self, qvalues, update_counter=None, eps_fixed=None):

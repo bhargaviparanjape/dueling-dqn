@@ -67,10 +67,10 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['eps_start'] = 0.9
         paramdict['eps_end'] = 0.05
         paramdict['eps_decay'] = 1e6
-        paramdict['eval_every'] = 10000
-        paramdict['log_every'] = 100
-        paramdict['stop_after'] = 10
-        paramdict['num_episodes'] = 10000
+        paramdict['eval_every'] = 2000
+        paramdict['log_every'] = 10
+        paramdict['stop_after'] = 5
+        paramdict['num_episodes'] = 20000
         paramdict['model_save'] = '_'.join([env,network,str(replay),agent,run])
 
     elif env=='CartPole-v0' and network=='mlp' and replay=='noexp' and agent=='dqn':
@@ -83,7 +83,7 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['eval_every'] = 5000
         paramdict['log_every'] = 10
         paramdict['stop_after'] = 5
-        paramdict['num_episodes'] = 10000
+        paramdict['num_episodes'] = 5000
         paramdict['model_save'] = '_'.join([env,network,str(replay),agent,run])
 
     elif env=='CartPole-v0' and network=='linear' and replay=='exp' and agent=='dqn':
@@ -93,10 +93,10 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['eps_start'] = 0.9
         paramdict['eps_end'] = 0.05
         paramdict['eps_decay'] = 1e6
-        paramdict['eval_every'] = 10000
-        paramdict['log_every'] = 100
+        paramdict['eval_every'] = 2000
+        paramdict['log_every'] = 10
         paramdict['batch_size'] = 32
-        paramdict['stop_after'] = 10
+        paramdict['stop_after'] = 5
         paramdict['num_episodes'] = 10000
         paramdict['model_save'] = '_'.join([env,network,str(replay),agent,run])
 

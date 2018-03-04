@@ -64,6 +64,34 @@ class mlpQNetwork(baseQNetwork):
         output = self.linear3(hidden2)
         return output
 
+class duelmlpQNetwork(baseQNetwork):
+    def __init__(self, env, hidden1=16, hidden2=16, hidden3=16):
+        super(duelmlpQNetwork, self).__init__(env)
+        self.input_size = self.env.observation_space.shape[0]
+        self.output_size = self.env.action_space.n
+        self.hidden1 = hidden1
+        self.hidden2 = hidden2
+        self.hidden3 = hidden3
+        self.linear1 = nn.Linear(self.input_size, self.hidden1)
+        self.linear2 = nn.Linear(self.hidden1, self.hidden2)
+        self.linear3_value = nn.Linear(self.hidden2, self.hidden3)
+        self.output_value = nn.Linear(self.hidden3, 1)
+        self.linear3_adv = nn.Linear(self.hidden2, self.hidden3)
+        self.output_adv = nn.Linear(self.hidden1, self.output_size)
+
+    def forward(self, input_state):
+        hidden1 = self.linear1(input_state)
+        hidden1 = nn.functional.relu(hidden1)
+        hidden2 = self.linear2(hidden1)
+        hidden2 = nn.functional.relu(hidden2)
+        linear3_value = self.linear3_value(hidden2)
+        linear3_value = nn.functional.relu(linear3_value)
+        output1 = self.output_value(linear3_value)
+        linear3_adv = self.linear3_adv(hidden2)
+        linear3_adv = nn.functional.relu(linear3_adv)
+        output2 = self.output_adv(linear3_adv)
+        return output1, output2
+
 class convQNetwork(baseQNetwork):
     def __init__(self, env):
         super(convQNetwork, self).__init__(env)
@@ -114,14 +142,15 @@ class DQN_Agent():
         self.gamma = self.paramdict['gamma']
         self.target_update = self.paramdict['target_update']
         
+
         if self.network=='linear':
             self.model = linearQNetwork(self.env)
+        elif self.network=='mlp' and self.agent=='duelling':
+            self.model = duelmlpQNetwork(self.env)
         elif self.network=='mlp':
             self.model = mlpQNetwork(self.env)
         elif self.network=='conv' and self.agent=='doubledqn':
             self.model = convQNetwork(self.env)
-        elif self.network=='mlp' and self.agent=='duellingdqn':
-            raise NotImplementedError()
         else:
             raise NotImplementedError()
         
@@ -178,9 +207,20 @@ class DQN_Agent():
             next_state_var = next_state_var.cuda()
         
         if self.target_update is None:
-            nqvalues = self.model(next_state_var)
+            if self.agent=='duelling':
+                vvalues, avalues = self.model(next_state_var)
+                nqvalues = vvalues.repeat(1,self.env.action_space.n) + \
+                          (avalues - torch.mean(avalues).repeat(1,self.env.action_space.n))
+            else:
+                nqvalues = self.model(next_state_var)
         else:
-            nqvalues = self.target_model(next_state_var)
+            if self.agent=='duelling':
+                vvalues, avalues = self.target_model(next_state_var)
+                nqvalues = vvalues.repeat(1,self.env.action_space.n) + \
+                          (avalues - torch.mean(avalues).repeat(1,self.env.action_space.n))
+            else:
+                nqvalues = self.target_model(next_state_var)
+
         nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
         
@@ -205,7 +245,14 @@ class DQN_Agent():
         if self.use_cuda and torch.cuda.is_available():
             state_batch = state_batch.cuda()
             action_batch = action_batch.cuda()
-        prediction = self.model(state_batch).gather(1, action_batch.view(batch_size, 1))
+        
+        if self.agent=='duelling':
+            vvalues_,avalues_  = self.model(state_batch)
+            prediction = vvalues_.repeat(1, self.env.action_space.n) + \
+                        (avalues_ - torch.mean(avalues_).repeat(1, self.env.action_space.n))
+            prediction = prediction.gather(1, action_batch.view(batch_size, 1))
+        else:
+            prediction = self.model(state_batch).gather(1, action_batch.view(batch_size, 1))
         
         target = Variable(torch.zeros(batch_size))
         next_state_batch = Variable(torch.FloatTensor(batch.next_state),volatile=True)
@@ -214,9 +261,19 @@ class DQN_Agent():
             next_state_batch = next_state_batch.cuda()
         
         if self.target_update is None:
-            nqvalues = self.model(next_state_batch)
+            if self.agent=='duelling':
+                n_vvalues, n_avalues = self.model(next_state_batch)
+                nqvalues = n_vvalues.repeat(1, self.env.action_space.n) + \
+                (n_avalues - torch.mean(n_avalues).repeat(1, self.env.action_space.n))
+            else:
+                nqvalues = self.model(next_state_batch)
         else:
-            nqvalues = self.target_model(next_state_batch)
+            if self.agent=='duelling':
+                n_vvalues, n_avalues = self.target_model(next_state_batch)
+                nqvalues = n_vvalues.repeat(1, self.env.action_space.n) + \
+                (n_avalues - torch.mean(n_avalues).repeat(1, self.env.action_space.n))                
+            else:
+                nqvalues = self.target_model(next_state_batch)
         
         nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
@@ -292,7 +349,12 @@ class DQN_Agent():
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
                 if (update_counter-1) % repeat_action == 0:
-                    qvalues = self.model(state_var)
+                    if self.agent=='duelling':
+                        vvalues, avalues = self.model(state_var)
+                        qvalues = vvalues.repeat(1,self.env.action_space.n) + \
+                                  (avalues - torch.mean(avalues).repeat(1,self.env.action_space.n))
+                    else:
+                        qvalues = self.model(state_var)
                     action = self.epsilon_greedy_policy(qvalues, update_counter)
                 next_state, reward, done, _ = self.env.step(action)
                 if self.network == 'conv':
@@ -359,7 +421,14 @@ class DQN_Agent():
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
-                qvalues = self.model(state_var)
+
+                if self.agent=='duelling':
+                    vvalues, avalues = self.model(state_var)
+                    qvalues = vvalues.repeat(1,self.env.action_space.n) + \
+                                (avalues - torch.mean(avalues).repeat(1, self.env.action_space.n))
+                else:
+                    qvalues = self.model(state_var)
+
                 if evaluate:
                     action = self.epsilon_greedy_policy(qvalues, eps_fixed =0.05)
                 else:

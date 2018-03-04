@@ -131,6 +131,8 @@ class DQN_Agent():
         self.env_name = env_name
         self.env = gym.make(env_name)
         self.test_env = gym.make(env_name)
+        if render:
+            self.test_env = wrappers.Monitor(self.env, os.path.join("recording"), video_callable=lambda episode_id: True, force=True)
         self.use_cuda = use_cuda
         self.loss_function = nn.MSELoss()
         self.exp_replay = exp_replay
@@ -141,6 +143,7 @@ class DQN_Agent():
         self.num_episodes = self.paramdict['num_episodes']
         self.gamma = self.paramdict['gamma']
         self.target_update = self.paramdict['target_update']
+        self.plot_value = []
         
 
         if self.network=='linear':
@@ -380,6 +383,7 @@ class DQN_Agent():
                     avg_reward = self.test(num_test_episodes = 20, evaluate = True, verbose= False, 
                                            num_updates = model_update_counter/eval_every)
                     t_counter.append(avg_reward)
+                    self.ploy_values.append(avg_reward)
                     if not trial and avg_reward >= max_average_reward:
                         print ('*'*80)
                         print ('Saving Best Model')
@@ -388,8 +392,9 @@ class DQN_Agent():
                         self.model.save_model(model_save)
                     if self.early_stop(t_counter):
                         print ('*'*80)
-                        print ('EarlyStopping.... Training Complete')
+                        print ('EarlyStopping.... Training Complete, Plotting and Recording')
                         print ('*'*80)
+                        self.plot_average_reward(model_save, eval_every)
                         return
                 if done:
                     if verbose and episode % log_every == 0:
@@ -400,7 +405,7 @@ class DQN_Agent():
         print ('*'*80)
         return
 
-    def test(self, model_load=None, num_test_episodes = 100, evaluate = False, verbose = True, 
+    def test(self, model_load=None, render = False, num_test_episodes = 100, evaluate = False, verbose = True, 
              num_updates = 0):
         print ('*'*80)
         print ('Testing Performance.......')
@@ -418,6 +423,8 @@ class DQN_Agent():
                 cur_state = self.get_frames(cur_state)
             episode_reward = 0
             for t in count():
+                if render and evaluate == False:
+                    self.test_env.render()
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
@@ -480,6 +487,16 @@ class DQN_Agent():
         print('Memory Burn In Complete')
         print('*'*80)
 
+    def plot_average_reward(self, model_save, eval_every):
+        plt.plot(self.performance_average_reward)
+        fout = open(os.path.join(self.checkpoint_directory, "performance.txt"), "w+")
+        fout.write("\n".join(self.plot_average_reward))
+        fout.close()
+        plt.xlabel("Number of updates ({0})".format(eval_every))
+        plt.ylabel("Reward")
+        plt.title("Performance Curve for {0}".format(model_save))
+        plt.savefig(os.path.join(self.checkpoint_directory, "performance.png"))
+
             
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
@@ -520,7 +537,8 @@ def main(args):
     if args.train:
         dqn_agent.train(verbose = True, trial=is_trial)
     elif os.path.exists(model_load):
-        dqn_agent.test(model_load)
+        dqn_agent.test(model_load, render=True)
+
 
 if __name__ == '__main__':
     main(sys.argv)

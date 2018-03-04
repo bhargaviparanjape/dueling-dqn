@@ -112,6 +112,7 @@ class DQN_Agent():
         self.paramdict = paramdict
         self.num_episodes = self.paramdict['num_episodes']
         self.gamma = self.paramdict['gamma']
+        self.target_update = self.paramdict['target_update']
         
         if self.network=='linear':
             self.model = linearQNetwork(self.env)
@@ -124,6 +125,9 @@ class DQN_Agent():
         else:
             raise NotImplementedError()
         
+        if self.target_update is not None:
+            self.target_model = copy.deepcopy(self.model)
+            
         self.transition = namedtuple('transition', ('state', 'action', 'next_state', 
                                                     'reward', 'is_terminal'))
         
@@ -159,11 +163,11 @@ class DQN_Agent():
     
     def early_stop(self, t_counter):
         if self.env_name == 'CartPole-v0':
-            return min(t_counter)==200
+            return min(t_counter) == 200
         elif self.env_name == 'MountainCar-v0':
-            return False
+            return min(t_counter) > -120
         elif self.env_name == 'SpaceInvaders-v0':
-            return False
+            return min(t_counter) > 1000
     
     def update_model(self, next_state, reward, qvalues, done):
         
@@ -173,7 +177,10 @@ class DQN_Agent():
         if self.use_cuda and torch.cuda.is_available():
             next_state_var = next_state_var.cuda()
         
-        nqvalues = self.model(next_state_var)
+        if self.target_update is None:
+            nqvalues = self.model(next_state_var)
+        else:
+            nqvalues = self.target_model(next_state_var)
         nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
         
@@ -205,7 +212,12 @@ class DQN_Agent():
         
         if self.use_cuda and torch.cuda.is_available():
             next_state_batch = next_state_batch.cuda()
-        nqvalues = self.model(next_state_batch)
+        
+        if self.target_update is None:
+            nqvalues = self.model(next_state_batch)
+        else:
+            nqvalues = self.target_model(next_state_batch)
+        
         nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
 
@@ -240,16 +252,32 @@ class DQN_Agent():
         stop_after = self.paramdict['stop_after']
         batch_size = self.paramdict['batch_size']
         model_save = os.path.join('saved_models', self.paramdict['model_save'])
+        repeat_action = self.paramdict['repeat_action']
+        model_update_frequency = self.paramdict['update_frequency']
+        choose_optimizer =  self.paramdict['optimizer']
+        
+        if repeat_action is None:
+            repeat_action = 1
+        
+        if model_update_frequency is None:
+            model_update_frequency = 1
         
         if self.use_cuda and torch.cuda.is_available():
             self.model.cuda()
+            if self.target_update is not None:
+                self.target_model.cuda()
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr = self.paramdict['lrate'])
+        if choose_optimizer =='rmsprop':
+            self.optimizer = optim.RMSprop(self.model.parameters(), lr = self.paramdict['lrate'])
+        else:
+            self.optimizer = optim.Adam(self.model.parameters(), lr = self.paramdict['lrate'])
+            
         print ('*'*80)
         print ('Training.......')
         print ('*'*80)
         t_counter = deque(maxlen=stop_after)
         update_counter = 1
+        model_update_counter = 1
         max_average_reward = float('-Inf')
         if self.exp_replay=='exp':
             self.burn_in_memory()
@@ -263,8 +291,9 @@ class DQN_Agent():
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
-                qvalues = self.model(state_var)
-                action = self.epsilon_greedy_policy(qvalues, update_counter)
+                if (update_counter-1) % repeat_action == 0:
+                    qvalues = self.model(state_var)
+                    action = self.epsilon_greedy_policy(qvalues, update_counter)
                 next_state, reward, done, _ = self.env.step(action)
                 if self.network == 'conv':
                     next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
@@ -272,16 +301,22 @@ class DQN_Agent():
                 if self.exp_replay=='exp':
                     self.replay.append(self.transition(cur_state, action, next_state, 
                                                        reward, done))
-                    loss = self.update_model_with_replay(batch_size)
-                else:
+                    if update_counter % model_update_frequency == 0:
+                        loss = self.update_model_with_replay(batch_size)
+                        model_update_counter += 1
+                elif update_counter % model_update_frequency == 0:
                     loss = self.update_model(next_state, reward ,qvalues, done)
+                    model_update_counter += 1
                     
                 update_counter += 1
                 cur_state = next_state
                 
-                if update_counter% eval_every == 0:
+                if self.target_update is not None and model_update_counter % self.target_update == 0:
+                    self.target_model.load_state_dict(self.model.state_dict())
+                
+                if model_update_counter% eval_every == 0:
                     avg_reward = self.test(num_test_episodes = 20, evaluate = True, verbose= False, 
-                                           num_updates = update_counter/eval_every)
+                                           num_updates = model_update_counter/eval_every)
                     t_counter.append(avg_reward)
                     if not trial and avg_reward >= max_average_reward:
                         print ('*'*80)
@@ -354,7 +389,8 @@ class DQN_Agent():
     def burn_in_memory(self):
         # Initialize your replay memory with a burn_in number of episodes / transitions.
         memory_size = self.paramdict['memory_size']
-        self.replay = Replay_Memory(memory_size= memory_size)
+        burn_in = self.paramdict['burn_in']
+        self.replay = Replay_Memory(memory_size = memory_size, burn_in = burn_in)
         state = self.env.reset()
         if self.network == 'conv':
             state = self.get_frames(state)
@@ -405,8 +441,8 @@ def main(args):
     if args.train and not is_trial and os.path.exists(model_location):
         print('A model with same specifications exist')
         print(os.listdir('saved_models'))
-        print('This will overwrite the model')
-        run = raw_input("Re-Enter the Run Number to avoid Conflict: ")
+        print('Aborting')
+        return
     
     paramdict = get_parameters(env_name, network, replay, agent, run)
     dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, 

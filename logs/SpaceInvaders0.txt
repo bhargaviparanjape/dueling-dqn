@@ -1,0 +1,23 @@
+********************************************************************************
+Training.......
+********************************************************************************
+********************************************************************************
+Memory Burn In Complete
+********************************************************************************
+Episode 0000002 : Steps = 387, Loss = 0.00
+Episode 0000004 : Steps = 648, Loss = 0.02
+Episode 0000006 : Steps = 499, Loss = 0.00
+Episode 0000008 : Steps = 629, Loss = 0.00
+Episode 0000010 : Steps = 669, Loss = 0.00
+Episode 0000012 : Steps = 1119, Loss = 0.00
+Episode 0000014 : Steps = 500, Loss = 0.00
+Episode 0000016 : Steps = 654, Loss = 0.03
+Episode 0000018 : Steps = 408, Loss = 0.02
+Episode 0000020 : Steps = 693, Loss = 0.88
+Episode 0000022 : Steps = 569, Loss = 0.00
+Episode 0000024 : Steps = 329, Loss = 1.07
+Episode 0000026 : Steps = 982, Loss = 0.21
+Episode 0000028 : Steps = 847, Loss = 0.00
+Episode 0000030 : Steps = 618, Loss = 0.21
+Episode 0000032 : Steps = 675, Loss = 0.00
+Episode 0000034 : Steps = 424, Loss = 0.00

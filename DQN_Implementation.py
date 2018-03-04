@@ -17,8 +17,12 @@ import torch
 from collections import deque
 from collections import namedtuple
 import copy
+from gym import wrappers
+import  matplotlib.pyplot as plt
 from parameters import *
+from SumTree1 import SumTree
 import cv2
+import shutil
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -123,11 +127,51 @@ class Replay_Memory():
     def append(self, transition):
         self.memory.append(transition)
 
+
+class Prioritized_Replay_Memory():
+    def __init__(self, memory_size=50000, burn_in=50000):
+        print("Initializing prioritized replay memory")
+        self.size = memory_size
+        self.burn_in = burn_in
+        self.tree = SumTree(self.size)
+        self.eta = 0.01
+        self.alpha = 0.65
+        self.memory = []
+
+    def getPriority(self, error):
+        return (error + self.eta) ** self.alpha
+
+    def sample_batch(self, batch_size=32):
+        batch = []
+        segment = self.tree.total()/batch_size
+        for i in range(batch_size):
+            leftleaf = segment * i
+            rightleaf = segment * (i + 1)
+
+            s = random.uniform(leftleaf, rightleaf)
+            (idx, p, data) = self.tree.get(s)
+            batch.append((idx, data + (0,)))
+        return batch
+
+
+    # will be called on the batch update..
+    def update(self, idx, error):
+        p = self.getPriority(error)
+        self.tree.update(idx, p)
+
+    def append(self, transition):
+        p = self.getPriority(transition[-1])
+        self.tree.add(p, transition[:-1])
+        ## supporting data structure to work with what aditya wrote
+        if len(self.memory) < self.size:
+            self.memory.append(0)
+
 class DQN_Agent():
 
     def __init__(self, env_name, network, agent, exp_replay, paramdict, render = False, 
                  use_cuda=False): 
-        
+
+        # Initialize Agent Parameters
         self.env_name = env_name
         self.env = gym.make(env_name)
         self.test_env = gym.make(env_name)
@@ -143,9 +187,17 @@ class DQN_Agent():
         self.num_episodes = self.paramdict['num_episodes']
         self.gamma = self.paramdict['gamma']
         self.target_update = self.paramdict['target_update']
-        self.plot_value = []
+        self.plot_values = []
+
+        if self.exp_replay == "priority":
+            self.transition = namedtuple('transition', ('state', 'action', 'next_state',
+                                                    'reward', 'is_terminal', 'priority'))
+        elif self.exp_replay == "exp":
+            self.transition = namedtuple('transition', ('state', 'action', 'next_state',
+                                                    'reward', 'is_terminal'))
         
 
+        # Initilize Q-network
         if self.network=='linear':
             self.model = linearQNetwork(self.env)
         elif self.network=='mlp' and self.agent=='duelling':
@@ -156,12 +208,12 @@ class DQN_Agent():
             self.model = convQNetwork(self.env)
         else:
             raise NotImplementedError()
-        
+
+        # Initialize Target Network
         if self.target_update is not None:
             self.target_model = copy.deepcopy(self.model)
             
-        self.transition = namedtuple('transition', ('state', 'action', 'next_state', 
-                                                    'reward', 'is_terminal'))
+
         
     def get_epsilon(self, update_counter):
         eps_strat = self.paramdict['eps_strat']
@@ -240,6 +292,12 @@ class DQN_Agent():
     def update_model_with_replay(self, batch_size):
         
         batch = self.replay.sample_batch(batch_size)
+
+        ## extra code for replay memory with priority
+        if self.exp_replay == "priority":
+            indexes = [o[0] for o in batch]
+            batch = [o[1] for o in batch]
+
         batch = self.transition(*zip(*batch))
         
         state_batch = Variable(torch.FloatTensor(batch.state))
@@ -286,6 +344,13 @@ class DQN_Agent():
         if self.use_cuda and torch.cuda.is_available():
             target = target.cuda()
 
+        ## if using priority queue , update priorities
+        if self.exp_replay == "priority":
+            errors = torch.abs(prediction.view(-1) - target).data
+            for i in range(batch_size):
+                idx = indexes[i]
+                self.replay.update(idx, errors[i])
+
         loss = self.loss_function(prediction, target)
         self.optimizer.zero_grad()
         loss.backward()
@@ -306,7 +371,8 @@ class DQN_Agent():
         return final_frame
 
     def train(self, verbose = False, trial=False):
-        
+
+        ## Initialize training parameters
         log_every = self.paramdict['log_every']
         eval_every = self.paramdict['eval_every']
         stop_after = self.paramdict['stop_after']
@@ -321,17 +387,21 @@ class DQN_Agent():
         
         if model_update_frequency is None:
             model_update_frequency = 1
-        
+
+        # Place model on Cuda
         if self.use_cuda and torch.cuda.is_available():
             self.model.cuda()
             if self.target_update is not None:
                 self.target_model.cuda()
-        
+
+
+        #Initialize Optimizer
         if choose_optimizer =='rmsprop':
             self.optimizer = optim.RMSprop(self.model.parameters(), lr = self.paramdict['lrate'])
         else:
             self.optimizer = optim.Adam(self.model.parameters(), lr = self.paramdict['lrate'])
-            
+
+
         print ('*'*80)
         print ('Training.......')
         print ('*'*80)
@@ -339,7 +409,9 @@ class DQN_Agent():
         update_counter = 1
         model_update_counter = 1
         max_average_reward = float('-Inf')
-        if self.exp_replay=='exp':
+
+        #Initialize burn-in memory
+        if self.exp_replay=='exp' or self.exp_replay=='priority':
             self.burn_in_memory()
             
         for episode in range(1,self.num_episodes+1):
@@ -348,6 +420,8 @@ class DQN_Agent():
                 cur_state = self.get_frames(cur_state)
             
             for t in count():
+
+                #Sample random state, sample action from e-greedy policy and take step in enviroment
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
                 if self.use_cuda and torch.cuda.is_available():
                     state_var = state_var.cuda()
@@ -362,9 +436,37 @@ class DQN_Agent():
                 next_state, reward, done, _ = self.env.step(action)
                 if self.network == 'conv':
                     next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
-                
-                if self.exp_replay=='exp':
-                    self.replay.append(self.transition(cur_state, action, next_state, 
+
+
+                # Calculate loss
+                if self.exp_replay =='exp' or self.exp_replay=='priority':
+
+
+                    ## Code for Prioritized replay
+                    if self.exp_replay == "priority":
+                        ## Another model computation is required if using priority based replay memory: to compute priority value
+                        next_state_var = Variable(torch.FloatTensor(next_state))
+                        if self.agent == 'duelling':
+                            if self.target_update is None:
+                                nvvalues, navalues = self.model(next_state_var)
+                            else:
+                                nvvalues, navalues = self.target_model(next_state_var)
+                            nqvalues = nvvalues.repeat(1, self.env.action_space.n) + \
+                                      (navalues - torch.mean(navalues).repeat(1, self.env.action_space.n))
+                        else:
+                            if self.target_update is None:
+                                nqvalues = self.model(next_state_var)
+                            else:
+                                nqvalues = self.target_model(next_state_var)
+                        nqvalues = nqvalues.max(0)[0]
+                        target = reward + (1 - done) * self.gamma * nqvalues
+                        priority = math.fabs(target.data[0] - qvalues.view(-1).max(0)[0])
+                        self.replay.append(self.transition(cur_state, action, next_state,
+                                                           reward, done, priority))
+
+
+                    else:
+                        self.replay.append(self.transition(cur_state, action, next_state,
                                                        reward, done))
                     if update_counter % model_update_frequency == 0:
                         loss = self.update_model_with_replay(batch_size)
@@ -372,18 +474,21 @@ class DQN_Agent():
                 elif update_counter % model_update_frequency == 0:
                     loss = self.update_model(next_state, reward ,qvalues, done)
                     model_update_counter += 1
-                    
+
+                ## resets for delayed updates
                 update_counter += 1
                 cur_state = next_state
-                
+
+                # If using target network. update parameters of target parameter
                 if self.target_update is not None and model_update_counter % self.target_update == 0:
                     self.target_model.load_state_dict(self.model.state_dict())
-                
+
+                # Evaluate on 20 episodes, Bookkeeping
                 if model_update_counter% eval_every == 0:
                     avg_reward = self.test(num_test_episodes = 20, evaluate = True, verbose= False, 
                                            num_updates = model_update_counter/eval_every)
                     t_counter.append(avg_reward)
-                    self.ploy_values.append(avg_reward)
+                    self.plot_values.append(avg_reward)
                     if not trial and avg_reward >= max_average_reward:
                         print ('*'*80)
                         print ('Saving Best Model')
@@ -400,9 +505,11 @@ class DQN_Agent():
                     if verbose and episode % log_every == 0:
                         print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
                     break
+
         print ('*'*80)
         print ('Training Complete')
         print ('*'*80)
+        self.plot_average_reward(model_save, eval_every)
         return
 
     def test(self, model_load=None, render = False, num_test_episodes = 100, evaluate = False, verbose = True, 
@@ -466,17 +573,47 @@ class DQN_Agent():
         # Initialize your replay memory with a burn_in number of episodes / transitions.
         memory_size = self.paramdict['memory_size']
         burn_in = self.paramdict['burn_in']
-        self.replay = Replay_Memory(memory_size = memory_size, burn_in = burn_in)
+
+        if self.exp_replay == "priority":
+            self.replay = Prioritized_Replay_Memory(memory_size=memory_size, burn_in=memory_size)
+        else:
+            self.replay = Replay_Memory(memory_size = memory_size, burn_in = burn_in)
         state = self.env.reset()
         if self.network == 'conv':
             state = self.get_frames(state)
+        state_var = Variable(torch.FloatTensor(state).unsqueeze(0))
+        if self.agent == 'duelling':
+            vvalues, avalues = self.model(state_var)
+            qvalues = vvalues.repeat(1, self.env.action_space.n) + \
+                      (avalues - torch.mean(avalues).repeat(1, self.env.action_space.n))
+        else:
+            qvalues = self.model(state_var)
         while len(self.replay.memory) < self.replay.burn_in:
-            action = self.env.action_space.sample()
+            ## action still follows policy with very large exploration
+            action = self.epsilon_greedy_policy(qvalues, eps_fixed=0.9)
             next_state, reward, done, _ = self.env.step(action)
             if self.network == 'conv':
                 next_state = self.get_frames(cur_frame=next_state, previous_frames=state)
 
-            self.replay.append(self.transition(state, action, next_state, reward, done))
+            ## code to assign initial priorities to burn-in for prioritized replay
+            if self.exp_replay == "priority":
+                next_state_var = Variable(torch.FloatTensor(next_state))
+                if self.agent == 'duelling':
+                    ## **target model not required since they are identical
+                    nvvalues, navalues = self.model(next_state_var)
+                    nqvalues = nvvalues.repeat(1, self.env.action_space.n) + \
+                               (navalues - torch.mean(navalues).repeat(1, self.env.action_space.n))
+                else:
+                    nqvalues = self.model(next_state_var)
+                nqvalues = nqvalues.max(0)[0]
+                target = reward + (1 - done) * self.gamma * nqvalues
+                priority = math.fabs(target.data[0] - qvalues.view(-1).max(0)[0])
+                # priority = 1e4
+                self.replay.append(self.transition(state, action, next_state, reward, done, priority))
+            else:
+                self.replay.append(self.transition(state, action, next_state, reward, done))
+
+
             if done:
                 state = self.env.reset()
                 if self.network == 'conv':
@@ -488,7 +625,7 @@ class DQN_Agent():
         print('*'*80)
 
     def plot_average_reward(self, model_save, eval_every):
-        plt.plot(self.performance_average_reward)
+        plt.plot(self.plot_values)
         fout = open(os.path.join(self.checkpoint_directory, "performance.txt"), "w+")
         fout.write("\n".join(self.plot_average_reward))
         fout.close()
@@ -502,7 +639,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
     parser.add_argument('--env', dest='env', type=str, default='CartPole-v0')
     parser.add_argument('--network', dest='network', type=str, default='mlp')
-    parser.add_argument('--replay', dest='replay', type=int, default=0)
+    parser.add_argument('--replay', dest='replay', type=str, default='exp')
     parser.add_argument('--agent', dest='agent', type=str, default='dqn')
     parser.add_argument('--train', dest='train', type=int, default=1)
     parser.add_argument('--load', dest='model_load', type=str, default=None)
@@ -514,25 +651,32 @@ def parse_arguments():
 
 def main(args):
     args = parse_arguments()
+
+    ## PRIMARY ARGUMENTS for CODE
     env_name = args.env
     network = args.network
-    replay = 'exp' if args.replay else 'noexp'
+    replay = args.replay
     agent = args.agent
+
+
     use_cuda = args.use_cuda
     is_trial = args.trial
     model_load = args.model_load
     run = args.run
-    
+
+    ## CHECK FOR SAVED MODELS
     model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run]))
     if args.train and not is_trial and os.path.exists(model_location):
         print('A model with same specifications exist')
         print(os.listdir('saved_models'))
         print('Aborting')
         return
-    
+
+    ##Create Agent
     paramdict = get_parameters(env_name, network, replay, agent, run)
     dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, 
                           agent= agent, paramdict = paramdict, use_cuda = use_cuda)
+
 
     if args.train:
         dqn_agent.train(verbose = True, trial=is_trial)

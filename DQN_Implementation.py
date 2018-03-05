@@ -20,9 +20,19 @@ import copy
 from gym import wrappers
 import  matplotlib.pyplot as plt
 from parameters import *
-from SumTree1 import SumTree
+from SumTree import SumTree
 import cv2
 import shutil
+
+class Logger():
+    def __init__(self, location, trial = False):
+        self.location = location
+        self.trial = trial
+    
+    def printboth(self, message):
+        print(message)
+        if not self.trial:
+            print(message, file=open(self.location,'a'))
 
 class baseQNetwork(nn.Module):
     def __init__(self, env):
@@ -78,8 +88,8 @@ class duelmlpQNetwork(baseQNetwork):
         self.hidden3 = hidden3
         self.linear1 = nn.Linear(self.input_size, self.hidden1)
         self.linear2 = nn.Linear(self.hidden1, self.hidden2)
-        self.linear3_value = nn.Linear(self.hidden2, self.hidden3)
-        self.output_value = nn.Linear(self.hidden3, 1)
+        self.linear3_val = nn.Linear(self.hidden2, self.hidden3)
+        self.output_val = nn.Linear(self.hidden3, 1)
         self.linear3_adv = nn.Linear(self.hidden2, self.hidden3)
         self.output_adv = nn.Linear(self.hidden1, self.output_size)
 
@@ -88,12 +98,15 @@ class duelmlpQNetwork(baseQNetwork):
         hidden1 = nn.functional.relu(hidden1)
         hidden2 = self.linear2(hidden1)
         hidden2 = nn.functional.relu(hidden2)
-        linear3_value = self.linear3_value(hidden2)
-        linear3_value = nn.functional.relu(linear3_value)
-        output1 = self.output_value(linear3_value)
+        
+        linear3_val = self.linear3_val(hidden2)
+        linear3_val = nn.functional.relu(linear3_val)
+        output1 = self.output_val(linear3_val)
+        
         linear3_adv = self.linear3_adv(hidden2)
         linear3_adv = nn.functional.relu(linear3_adv)
         output2 = self.output_adv(linear3_adv)
+        
         return output1, output2
 
 class convQNetwork(baseQNetwork):
@@ -130,7 +143,7 @@ class Replay_Memory():
 
 class Prioritized_Replay_Memory():
     def __init__(self, memory_size=50000, burn_in=50000):
-        print("Initializing prioritized replay memory")
+        self.logger.printboth("Initializing Prioritized Replay Memory")
         self.size = memory_size
         self.burn_in = burn_in
         self.tree = SumTree(self.size)
@@ -152,9 +165,8 @@ class Prioritized_Replay_Memory():
             (idx, p, data) = self.tree.get(s)
             batch.append((idx, data + (0,)))
         return batch
-
-
-    # will be called on the batch update..
+    
+    # Will be called on the batch update
     def update(self, idx, error):
         p = self.getPriority(error)
         self.tree.update(idx, p)
@@ -175,8 +187,6 @@ class DQN_Agent():
         self.env_name = env_name
         self.env = gym.make(env_name)
         self.test_env = gym.make(env_name)
-        if render:
-            self.test_env = wrappers.Monitor(self.env, os.path.join("recording"), video_callable=lambda episode_id: True, force=True)
         self.use_cuda = use_cuda
         self.loss_function = nn.MSELoss()
         self.exp_replay = exp_replay
@@ -196,7 +206,6 @@ class DQN_Agent():
             self.transition = namedtuple('transition', ('state', 'action', 'next_state',
                                                     'reward', 'is_terminal'))
         
-
         # Initilize Q-network
         if self.network=='linear':
             self.model = linearQNetwork(self.env)
@@ -213,8 +222,6 @@ class DQN_Agent():
         if self.target_update is not None:
             self.target_model = copy.deepcopy(self.model)
             
-
-        
     def get_epsilon(self, update_counter):
         eps_strat = self.paramdict['eps_strat']
         eps_start = self.paramdict['eps_start']
@@ -247,11 +254,14 @@ class DQN_Agent():
     
     def early_stop(self, t_counter):
         if self.env_name == 'CartPole-v0':
-            return min(t_counter) == 200
+            return min(t_counter) > 195
         elif self.env_name == 'MountainCar-v0':
             return min(t_counter) > -120
         elif self.env_name == 'SpaceInvaders-v0':
-            return min(t_counter) > 1000
+            return min(t_counter) > 300
+
+    def set_logger(self, model_location, logfile, trial=False):
+        self.logger = Logger(os.path.join(model_location,logfile), trial=trial)
     
     def update_model(self, next_state, reward, qvalues, done):
         
@@ -293,7 +303,7 @@ class DQN_Agent():
         
         batch = self.replay.sample_batch(batch_size)
 
-        ## extra code for replay memory with priority
+        ## Extra code for replay memory with priority
         if self.exp_replay == "priority":
             indexes = [o[0] for o in batch]
             batch = [o[1] for o in batch]
@@ -344,7 +354,7 @@ class DQN_Agent():
         if self.use_cuda and torch.cuda.is_available():
             target = target.cuda()
 
-        ## if using priority queue , update priorities
+        ## If using priority queue , update priorities
         if self.exp_replay == "priority":
             errors = torch.abs(prediction.view(-1) - target).data
             for i in range(batch_size):
@@ -370,14 +380,14 @@ class DQN_Agent():
             final_frame[num_frames-1] = cur_frame
         return final_frame
 
-    def train(self, verbose = False, trial=False):
+    def train(self, model_save, verbose = False, trial=False):
 
         ## Initialize training parameters
         log_every = self.paramdict['log_every']
         eval_every = self.paramdict['eval_every']
+        cp_every = self.paramdict['cp_every']
         stop_after = self.paramdict['stop_after']
         batch_size = self.paramdict['batch_size']
-        model_save = os.path.join('saved_models', self.paramdict['model_save'])
         repeat_action = self.paramdict['repeat_action']
         model_update_frequency = self.paramdict['update_frequency']
         choose_optimizer =  self.paramdict['optimizer']
@@ -394,17 +404,15 @@ class DQN_Agent():
             if self.target_update is not None:
                 self.target_model.cuda()
 
-
         #Initialize Optimizer
         if choose_optimizer =='rmsprop':
             self.optimizer = optim.RMSprop(self.model.parameters(), lr = self.paramdict['lrate'])
         else:
             self.optimizer = optim.Adam(self.model.parameters(), lr = self.paramdict['lrate'])
 
-
-        print ('*'*80)
-        print ('Training.......')
-        print ('*'*80)
+        self.logger.printboth('*'*80)
+        self.logger.printboth('Training.......')
+        self.logger.printboth('*'*80)
         t_counter = deque(maxlen=stop_after)
         update_counter = 1
         model_update_counter = 1
@@ -440,8 +448,6 @@ class DQN_Agent():
 
                 # Calculate loss
                 if self.exp_replay =='exp' or self.exp_replay=='priority':
-
-
                     ## Code for Prioritized replay
                     if self.exp_replay == "priority":
                         ## Another model computation is required if using priority based replay memory: to compute priority value
@@ -464,7 +470,6 @@ class DQN_Agent():
                         self.replay.append(self.transition(cur_state, action, next_state,
                                                            reward, done, priority))
 
-
                     else:
                         self.replay.append(self.transition(cur_state, action, next_state,
                                                        reward, done))
@@ -475,7 +480,7 @@ class DQN_Agent():
                     loss = self.update_model(next_state, reward ,qvalues, done)
                     model_update_counter += 1
 
-                ## resets for delayed updates
+                ## Resets for delayed updates
                 update_counter += 1
                 cur_state = next_state
 
@@ -490,38 +495,48 @@ class DQN_Agent():
                     t_counter.append(avg_reward)
                     self.plot_values.append(avg_reward)
                     if not trial and avg_reward >= max_average_reward:
-                        print ('*'*80)
-                        print ('Saving Best Model')
-                        print ('*'*80)
+                        self.logger.printboth('*'*80)
+                        self.logger.printboth('Saving Best Model')
+                        self.logger.printboth('*'*80)
                         max_average_reward = avg_reward
-                        self.model.save_model(model_save)
+                        self.model.save_model(os.path.join(model_save,'best_model'))
                     if self.early_stop(t_counter):
-                        print ('*'*80)
-                        print ('EarlyStopping.... Training Complete, Plotting and Recording')
-                        print ('*'*80)
+                        self.logger.printboth('*'*80)
+                        self.logger.printboth('EarlyStopping.... Training Complete, Plotting and Recording')
+                        self.logger.printboth('*'*80)
                         self.plot_average_reward(model_save, eval_every)
                         return
+                if not trial and model_update_counter % cp_every ==0:
+                    cpdir = os.path.join(model_save ,'checkpoint')
+                    if not os.path.exists(cpdir):
+                        os.makedirs(cpdir)
+                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
                 if done:
                     if verbose and episode % log_every == 0:
-                        print('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
+                        self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
                     break
 
-        print ('*'*80)
-        print ('Training Complete')
-        print ('*'*80)
+        self.logger.printboth('*'*80)
+        self.logger.printboth('Training Complete')
+        self.logger.printboth('*'*80)
         self.plot_average_reward(model_save, eval_every)
         return
 
     def test(self, model_load=None, render = False, num_test_episodes = 100, evaluate = False, verbose = True, 
              num_updates = 0):
-        print ('*'*80)
-        print ('Testing Performance.......')
-        print ('*'*80)
+        self.logger.printboth('*'*80)
+        self.logger.printboth('Testing Performance.......')
+        self.logger.printboth('*'*80)
         
         if not evaluate:
             if self.use_cuda and torch.cuda.is_available():
                 self.model.cuda()
             self.model.load_model(model_load)
+
+        if render:
+            model_load_loc, model_load_file = os.path.split(model_load)
+            self.test_env = wrappers.Monitor(self.test_env, os.path.join(model_load_loc, model_load_file+'_recording'), 
+                                             video_callable=lambda episode_id: True, force=True)
             
         episode_reward_list = []
         for episode in range(1,num_test_episodes+1):
@@ -554,19 +569,19 @@ class DQN_Agent():
                 episode_reward += reward
                 if done:
                     if verbose:
-                        print('Episode %07d : Steps = %03d, Reward = %.2f' %(episode,t,episode_reward))
+                        self.logger.printboth('Episode %07d : Steps = %03d, Reward = %.2f' %(episode,t,episode_reward))
                     episode_reward_list.append(episode_reward)
                     break
         episode_reward_list = np.array(episode_reward_list)
-        print ('*'*80)
+        self.logger.printboth('*'*80)
         if evaluate:
-            print ('Num_Updates(*%d): %03d => Cumulative Reward: Mean= %f, Std= %f'  %(
+            self.logger.printboth ('Num_Updates(*%d): %03d => Cumulative Reward: Mean= %f, Std= %f'  %(
                     self.paramdict['eval_every'],num_updates,episode_reward_list.mean(),
                     episode_reward_list.std()))
         else:
-            print ('Cumulative Reward: Mean= %f, Std= %f'  %(episode_reward_list.mean(),
+            self.logger.printboth('Cumulative Reward: Mean= %f, Std= %f'  %(episode_reward_list.mean(),
                                                              episode_reward_list.std()))
-        print ('*'*80)
+        self.logger.printboth('*'*80)
         return episode_reward_list.mean()
         
     def burn_in_memory(self):
@@ -589,17 +604,17 @@ class DQN_Agent():
         else:
             qvalues = self.model(state_var)
         while len(self.replay.memory) < self.replay.burn_in:
-            ## action still follows policy with very large exploration
+            ## Action still follows policy with very large exploration
             action = self.epsilon_greedy_policy(qvalues, eps_fixed=0.9)
             next_state, reward, done, _ = self.env.step(action)
             if self.network == 'conv':
                 next_state = self.get_frames(cur_frame=next_state, previous_frames=state)
 
-            ## code to assign initial priorities to burn-in for prioritized replay
+            ## Code to assign initial priorities to burn-in for prioritized replay
             if self.exp_replay == "priority":
                 next_state_var = Variable(torch.FloatTensor(next_state))
                 if self.agent == 'duelling':
-                    ## **target model not required since they are identical
+                    ## Target model not required since they are identical
                     nvvalues, navalues = self.model(next_state_var)
                     nqvalues = nvvalues.repeat(1, self.env.action_space.n) + \
                                (navalues - torch.mean(navalues).repeat(1, self.env.action_space.n))
@@ -608,11 +623,10 @@ class DQN_Agent():
                 nqvalues = nqvalues.max(0)[0]
                 target = reward + (1 - done) * self.gamma * nqvalues
                 priority = math.fabs(target.data[0] - qvalues.view(-1).max(0)[0])
-                # priority = 1e4
+                # Priority = 1e4
                 self.replay.append(self.transition(state, action, next_state, reward, done, priority))
             else:
                 self.replay.append(self.transition(state, action, next_state, reward, done))
-
 
             if done:
                 state = self.env.reset()
@@ -620,19 +634,15 @@ class DQN_Agent():
                     state = self.get_frames(state)
             else:
                 state = next_state
-        print('*'*80)
-        print('Memory Burn In Complete')
-        print('*'*80)
+        self.logger.printboth('*'*80)
+        self.logger.printboth('Memory Burn In Complete')
+        self.logger.printboth('*'*80)
 
     def plot_average_reward(self, model_save, eval_every):
         plt.plot(self.plot_values)
-        fout = open(os.path.join(self.checkpoint_directory, "performance.txt"), "w+")
-        fout.write("\n".join(self.plot_average_reward))
-        fout.close()
-        plt.xlabel("Number of updates ({0})".format(eval_every))
-        plt.ylabel("Reward")
-        plt.title("Performance Curve for {0}".format(model_save))
-        plt.savefig(os.path.join(self.checkpoint_directory, "performance.png"))
+        plt.xlabel("Number of updates (*{0})".format(eval_every))
+        plt.ylabel("Cumulative Average Reward")
+        plt.savefig(os.path.join(model_save, "reward_plot.png"))
 
             
 def parse_arguments():
@@ -647,42 +657,51 @@ def parse_arguments():
     parser.add_argument('--cuda', dest='use_cuda', type=int, default=0)
     parser.add_argument('--render', dest='render', type=int, default=0)
     parser.add_argument('--run', dest='run', type=str, default='0')
+    parser.add_argument('--seed',dest='seed', type=int, default=0)
     return parser.parse_args()
 
 def main(args):
     args = parse_arguments()
 
-    ## PRIMARY ARGUMENTS for CODE
+    ## Primary Arguments for Code
     env_name = args.env
     network = args.network
     replay = args.replay
     agent = args.agent
 
-
     use_cuda = args.use_cuda
     is_trial = args.trial
     model_load = args.model_load
     run = args.run
+    render = args.render==1
+    seed = args.seed
 
-    ## CHECK FOR SAVED MODELS
-    model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run]))
-    if args.train and not is_trial and os.path.exists(model_location):
-        print('A model with same specifications exist')
-        print(os.listdir('saved_models'))
-        print('Aborting')
-        return
+    ## Check for Saved Models
+    model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run,str(seed)]))
+    if args.train and not is_trial:
+        if os.path.exists(model_location):
+            print('A model with same specifications and seed exist.... Aborting.....')
+            return
+        else:
+            os.makedirs(model_location)
 
-    ##Create Agent
+    ## Create Agent
     paramdict = get_parameters(env_name, network, replay, agent, run)
-    dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, 
-                          agent= agent, paramdict = paramdict, use_cuda = use_cuda)
-
+    dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, agent= agent, 
+                          paramdict = paramdict, use_cuda = use_cuda)
 
     if args.train:
-        dqn_agent.train(verbose = True, trial=is_trial)
+        dqn_agent.set_logger(model_location=model_location, logfile= 'trainlogs.txt', trial=is_trial)
+        dqn_agent.train(model_save = model_location,verbose = True, trial=is_trial)
     elif os.path.exists(model_load):
-        dqn_agent.test(model_load, render=True)
-
+        model_load_loc, model_load_file = os.path.split(model_load)
+        if render:
+            dqn_agent.set_logger(model_location=model_load_loc, logfile= model_load_file + '_testlogs.txt',
+                                 trial = True)
+            dqn_agent.test(model_load, num_test_episodes=1, render=True)
+        else:
+            dqn_agent.set_logger(model_location=model_load_loc, logfile= model_load_file + '_testlogs.txt')
+            dqn_agent.test(model_load)
 
 if __name__ == '__main__':
     main(sys.argv)

@@ -142,6 +142,19 @@ Prove that the mean $\mu_k$ of the available data may be computed incrementally 
 
 \noindent
 \begin{solution}
+From the definition of average, we have:
+$$\mu_{k-1} = \frac{x_1 + x_2 + ... + x_{k-1} }{k-1}$$
+$$(k-1)\mu_{k-1} = x_1 + x_2 + ... + x_{k-1}$$
+Similarly, 
+$$\mu_{k} = \frac{x_1 + x_2 + ... + x_{k-1} + x_k}{k}$$
+$$k\mu_{k} = x_1 + x_2 + ... + x_{k-1} + x_k$$
+$$k\mu_{k} = (k-1)\mu_{k-1} + x_k$$
+$$\mu_{k} = \frac{(k-1)\mu_{k-1} + x_k}{k}$$
+$$\mu_{k} = \mu_{k-1} + \frac{x_k - \mu_{k-1}}{k}$$
+$$\mu_{k} = \mu_{k-1} + f(\mu_{k-1}, x_k)$$
+where
+$$f(\mu_{k-1}, x_k) = \frac{x_k - \mu_{k-1}}{k}$$
+Hence mean $\mu_k$ can be computed  incrementally (online) at every time step $k$ using the above update equation with $f$ as defined.
 \end{solution}
 
 \subsection*{Question 1.b \textbf{[5pts]}}
@@ -155,6 +168,7 @@ The function $f(x_k, \mu_{k-1})$ represents the error between the current estima
 
 \noindent
 \begin{solution}
+Let $s_t = s$ and $N(s_t) = k$ at time $t$. Hence, 
 \end{solution}
 
 \subsection*{Question 1.c \textbf{[5pts]}}

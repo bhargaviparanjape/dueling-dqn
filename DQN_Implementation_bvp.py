@@ -124,7 +124,7 @@ class Prioritized_Replay_Memory():
         self.burn_in = burn_in
         self.tree = SumTree(self.size)
         self.eta = 0.01
-        self.alpha = 0.95
+        self.alpha = 0.6
         self.memory = []
 
     def getPriority(self, error):

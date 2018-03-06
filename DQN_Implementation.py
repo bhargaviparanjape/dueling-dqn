@@ -512,7 +512,7 @@ class DQN_Agent():
                         if not trial:
                             self.plot_average_reward(model_save, eval_every)
                         return
-                if not trial and model_update_counter % cp_every ==0:
+                if not trial and (model_update_counter-1) % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
                     if not os.path.exists(cpdir):
                         os.makedirs(cpdir)

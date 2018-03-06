@@ -433,6 +433,12 @@ class DQN_Agent():
                 cur_state = self.get_frames(cur_state)
             
             for t in count():
+                
+                if not trial and model_update_counter % cp_every ==0:
+                    cpdir = os.path.join(model_save ,'checkpoint')
+                    if not os.path.exists(cpdir):
+                        os.makedirs(cpdir)
+                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
 
                 #Sample random state, sample action from e-greedy policy and take step in enviroment
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
@@ -512,11 +518,6 @@ class DQN_Agent():
                         if not trial:
                             self.plot_average_reward(model_save, eval_every)
                         return
-                if not trial and (model_update_counter-1) % cp_every ==0:
-                    cpdir = os.path.join(model_save ,'checkpoint')
-                    if not os.path.exists(cpdir):
-                        os.makedirs(cpdir)
-                    self.model.save_model(os.path.join(cpdir,str(model_update_counter-1)))
                 if done:
                     if verbose and episode % log_every == 0:
                         self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))

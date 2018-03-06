@@ -32,6 +32,8 @@
   Spring 2018\\
 }
 
+\author{Bhargavi Paranjape, Aditya Siddhant}
+
 \date{Febuary 21, 2018\\
   \hspace{1cm}\\
 Due March 7, 2018}
@@ -303,175 +305,126 @@ We can hence define feature functions over groups according to the mapping $\mat
 Thus, if the feature vectors are normalized to norm-1 and all feature functions of states mapped to the same group are identical, the function approximation setting reduces to the tabular setting.
 \end{solution}
 
+\section{Programming Implementation}
+For each of the experiments, we provide a detailed setting with values of different hyperparameters used and the reason for the choice of some of the hyperparameters. We also provide a plot of model performance which is measured by calculating expected rewards at regular intervals during training. Further, we analyze each of the models based on its loss, reward and the policy learned as suggested by the video recorded at different training stages.
 
-\section{Programming Questions}
-Before starting your implementation, make sure you have the environments correctly installed.
-For this assignment you will solve Cartpole (\texttt{Cartpole-v0}) and Mountain Car-v0 (\texttt{MountainCar-v0}). For extra-credit \textbf{[+10pts]}, you will need to additionally solve the more challenging Space Invaders (\texttt{SpaceInvaders-v0}) environment. For all of the following implementations we would like you to document your findings in the writeup as described after the questions.
-
-Try to keep your implementation modular. Once you have the basic DQN working it will only be a little bit of work to get DQN and dueling networks working. Please write your code in the file \texttt{DQN\_implementation.py}, the template code provided inside is just there to give you an idea on how you can structure your code but is not mandatory to use.
-
-\begin{enumerate}
-
-    \item\textbf{[20pts]} Implement a linear Q-network (no experience replay, i.e. experience is sampled directly from the environment online). Train your network (separately) on both the \texttt{CartPole-v0} environment and the \texttt{MountainCar-v0} environment. Use the full state of each environment (such as angular displacement and velocity in the case of Cartpole) as inputs.
-              
-    In case of the simple environments, you may observe good performance even with a linear Q-network. If you can get this running you will have understood the basics of the assignment. 
-    
-    For this question, look at the \texttt{QNetwork} and \texttt{DQN\_Agent} classes in the code. You will have to implement the following: 
-    \begin{itemize}
-        \item Create an instance of the Q Network class.
-        \item Create a function that constructs a policy from the Q values predicted by the Q Network - both epsilon greedy and greedy policies.
-        \item Create a function to train the Q Network, by interacting with the environment.
-        \item  Create a function to test the Q Network's performance on the environment.
-    \end{itemize}
-    
-    Are you able to solve both environments with a linear network? Why or why not? 
-
-    \item \textbf{[15pts]} Implement a linear Q-network with experience replay. Use the experimental setup of~\cite{mnih2013playing, mnih2015human} to the extent possible. Use this as an opportunity to work out any bugs with your replay memory.
-    
-    You can refer to the \texttt{Replay\_Memory} class in the code. You may need the following functions: 
-    \begin{itemize}
-        \item Appending a new transition from the memory. 
-        \item Sampling a batch of transitions from the memory to train your network. 
-        \item Initially burn in a number of transitions into the memory. 
-        \item You will also need to modify your training function of your network to learn from experience sampled \textit{from the memory}, rather than learning online from the agent. 
-    \end{itemize}
-              
-    As above, train your network (separately) on both the \texttt{CartPole-v0} environment and the \texttt{MountainCar-v0} environment. Does adding experience replay improve learning? 
-             
-	\item \textbf{[20pts]} Implement a deep Q-network, similar to that described in~\cite{mnih2013playing, mnih2015human}. While these papers use a convolutional architecture to address the image based state representation of Atari environments, a multi-layer Perceptron with $3$ hidden units should suffice for the environments. 
-	
-	Document any changes to your training procedure, optimization, etc. that you make to train your deep Q-network, as compared to the linear case. How does using this deep Q-network affect performance, convergence rate, and stability of training on both \texttt{Cartpole-v0} and \texttt{MountainCar-v0}?
-	
-	You may use the cluster to train this agent \textit{once you have worked out the bugs}, although these environments are simple enough that you may solve them on your own laptop in a few hours. 
-	
-    \item \textbf{[15pts]} Implement the dueling deep Q-network as described in~\cite{wang2015dueling}.
-    Train your network (separately) on both the \texttt{CartPole-v0} environment and the \texttt{MountainCar-v0} environment. How does adding the two stream architecture affect performance? 
-    
-    \item \textbf{Extra Credit: [+10 pts]}  Implement a deep Q-network (dueling deep Q-network not required) using a convolutional architecture to solve the \texttt{SpaceInvaders-v0} environment. Train your network by passing in $4$ consecutive frames from the environment, as described in \cite{mnih2015human, mnih2013playing}. 
-    
-    Modify your replay memory to store images, preprocess them as necessary (resizing / normalization, etc.), and sample frames to provide to the network for training. You may find it necessary to implement a Target Q Network (as in the double Q learning paper \cite{van2016deep}) to stabilize training of the networks. Document these changes in your report.
-    
-    
-\end{enumerate}
-
-\noindent
-\textbf{5pts} out of the total of \textbf{100pts} are reserved for overall report quality.
-
-\textbf{For each of the above questions}, we want you to generate a \emph{performance plot across time}.  To do this, you should periodically run (e.g., every $10000$ or $100000$ updates to the Q-network) the policy induced by the current Q-network for $20$ episodes and average the total reward achieved. Note that in this case we are interested in total reward without discounting or truncation. During evaluation, you should use a tinier $\epsilon$ value in your $\epsilon$-greedy policy. We recommend $0.05$. The small amount of randomness is to prevent the agent from getting stuck.  Also briefly comment on the training behavior and whether you find something unexpected in the results obtained.
-
-Additionally, for each of the models, we want you to generate a \emph{video capture} of an episode played by your trained Q-network at different points of the training process ($0/3$, $1/3$, $2/3$, and $3/3$ through the training process) of both environments, i.e. \texttt{Cartpole-v0} and \texttt{MountainCar-v0}. 
-
-An episode is defined as $200$ successful time steps in Cartpole, and reaching the top of the mountain in Mountain Car. You can use the \texttt{Monitor} wrapper to generate both the performance curves (although only for $\epsilon$-greedy in this case) and the video captures. Look at the OpenAI Gym tutorial for more details on how to use it. We recommend that you periodically checkpoint your network files and then reload them after training to generate the evaluation curves. It is recommended you do regular checkpointing anyways in order to ensure no work is lost if your program crashes.
-
-Finally, construct a \emph{table} with the average total reward per episode in $100$ episodes
-achieved by your fully trained model. Also show the information about the standard deviation, i.e., 
-each entry should have the format $\text{mean} \pm \text{std}$.
-There should be an entry per model. Briefly comment on the results of this table.
-
-We recommend you to follow closely the hyperparameter setup described below, or as in the references for training on the image based environment. Even if you fully replicate the experimental from the paper, we expect you to summarize it briefly in the report once. After that you can simply describe differences from it and mention that you used the same experimental setup otherwise if that was the case.
-
-You should submit  your report, video captures, and code through Gradescope. Your code should be 
-reasonably well-commented in key places of your implementation. Make sure your code also has a README file.
-
-\section*{Guidelines on references}
-We recommend you to read all the papers mentioned in the references. There is a significant overlap between different papers, so in reality you should only need certain sections to implement 
-what we ask of you. We provide pointers for relevant sections for this assignment for your convenience
-
-The work in~\cite{mnih2013playing} contains the description of the experimental setup. Read paragraph~3 of section~4 for a description of the replay memory; read Algorithm~1; read  paragraphs~1 and~3 of section~4.1 for preprocessing and model architecture respectively; read section~5 for the rest of the experimental setup (e.g., reward truncation, optimization algorithm, exploration schedule,
-and other hyperparameters). The methods section in~\cite{mnih2015human}, may clarify a few details
-so it may be worth to read selectively if questions remain after reading~\cite{mnih2013playing}.
-
-In~\cite{wang2015dueling}, look at equation~11 and read around three paragraphs up and down for how to set up the dueling architecture; read paragraph~2 of section~4.2 for comments on the experimental setup 
-and model architecture. It may be worth to skim additional sections of all these papers. 
-
-\section*{Guidelines on hyperparameters}
-
-In this assignment you will implement improvements to the simple update Q-learning formula that make learning more stable and the trained model more performant. We briefly comment on the meaning of each hyperparameter and some reasonable values for them.
-\begin{itemize}
-	\item Discount factor $\gamma$: $1.$ for MountainCar, and $0.99$ for CartPole and Space Invaders. 
-	\item Learning rate $\alpha$: $0.0001$; typically a schedule is used where learning rates get increasingly smaller. 
-    \item Exploration probability $\epsilon$ in $\epsilon$-greedy: 
-    While training, we suggest you start from a high epsilon value, and anneal this epsilon to a small value ($0.05$ or $0.1$) during training. 
-    We have found decaying epsilon linearly from $0.5$ to $0.05$ over $100000$  iterations works well. 
-    During test time, you may use a greedy policy, or an epsilon greedy policy with small epsilon ($0.05$).
-    
-	\item Number of training sampled interactions with the environment: 
-	For MountainCar-v0, we recommend training for $3000$ to $5000$ episodes, though you should see improvements much before this. For CartPole-v0
-	, train for $1000000$ iterations. 
-	
-	Look at the average reward achieved in the last few episodes  to test if performance has plateaued; it is usually a 
-    good idea to consider reducing the learning rate or the exploration 
-	probability if performance plateaus.
- 	
- 	\item Replay buffer size: $50000$; 
-	this hyperparameter is used only for experience replay. It determines how many of the last transitions experienced you will keep in the replay buffer before you start rewriting this experience with more recent transitions. \textbf{(For Extra Credit:) } Use a replay buffer size of $1000000$.
-	
-	\item Batch size:  32;  typically, rather doing the update as in (2), we use a small batch ofsampled experiences from the replay buffer; this provides better hardware utilization.
-	
- 	\item \textbf{(For Extra Credit:) }Number of frames to feed to the Q-network: $4$; as a single frame may not be a good representation of the current state. 
-% 		cannot tell if the spaceships are moving left or right), 
-    Multiple frames are fed to the Q-network to compute the Q-values; note that in this case, the state effectively is a list of last few frames.
-    
-    \item \textbf{(For Extra Credit:) } Input  image  resizing:  Using the original input size of 210x160x3 is computationally expensive. Instead, you may resize the image input to 84x84x3 to make it more manageable. Further, you may convert the RGB image to a Grayscale image.
-    
-
-\end{itemize}
-
-In addition to the hyperparameters you also have the choice of which
-optimizer and which loss function to use. We recommend you use Adam as
-the optimizer. It will automatically adjust the learning rate based on
-the statistics of the gradients its observing. Think of it like a
-fancier SGD with momentum. Both Tensorflow and Keras provide versions
-of Adam.
-
-For the loss function, you can use Mean Squared Error - if you are doing so, \textbf{please demonstrate} how the vanilla Q-learning update is equivalent to minimizing a quadratic loss function. 
-
-The implementations of the methods in this homework have multiple
-hyperparameters.  These hyperparameters (and others) are part of the
-experimental setup described in~\cite{mnih2013playing, mnih2015human}.
-For the most part, we strongly suggest you to follow the experimental
-setup described in each of the papers.  \cite{mnih2013playing,
-  mnih2015human} was published first; your choice of hyperparameters
-and the experimental setup should follow closely their setup.
-\cite{van2016deep, wang2015dueling} follow for the most part the setup
-of \cite{mnih2013playing, mnih2015human}.  We recommend you to read
-all these papers.  We give pointers for the most relevant portions for
-you to read in a future section.
-
-\section*{Guidelines on implementation}
-
-This homework requires a significant implementation effort. It is hard to read through the papers once and know immediately what you will need to be implement. We suggest you to think about the different components (e.g., replay buffer, Tensorflow or Keras model definition, model updater, model runner,
-exploration schedule, learning rate schedule, ...) that you will need to implement for each of the different methods that we ask you about, and then read through the papers having these components in mind. By this we mean that you should try to divide and implement small components with well-defined functionalities rather than try to implement everything at once. Much of the code and experimental setup is shared between the different methods so identifying well-defined reusable components will 
-save you trouble. We provide some code templates that you can use if you wish. Contrary to the previous assignment, abiding to the function signatures defined in these templates is not mandatory you can write your code from scratch if you wish. 
-
-Please note, that while this assignment has a lot of pieces to implement, most of the algorithms you will use in your project will be using the same pieces. Feel free to reuse any code you write for your
-homeworks in your class projects.
-
-
-This is a challenging assignment. 
-\textbf{Please start early!}
+\paragraph{Loss Function} We use Mean Squared Error (MSE) as the loss function for our experiments as minimizing MSE Loss is equivalent to the vanilla Q-learning update. The Vanilla Q-learning update is:
+\begin{align*}
+	Q_w^{t+1}(s, a) := Q_w^{t}(s, a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q_w^t(s', a') 
+				- Q_w^t(s, a) 
+		\right)
+\end{align*}
+At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which implies that the second term on the RHS should be close to zero which is exactly what minimizing MSE Loss achieves.
 
 \pagebreak[4]
 
-\section{Programming Implementation}
 \subsection{Linear Q-Network without Experience Replay}
-\subsection*{MountainCar-v0}
 \subsection*{CartPole-v0}
+\paragraph{Experiment Setting} There were only four weights in the network one corresponding to each variable in the state and a bias. To learn these weights, we used Adam Optimizer with initial learning rate 0.0001 to optimize the loss. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. The model was trained for 500 episodes. Figure \ref{fig:01} shows the performance of the model after different number of weight updates to model during training.
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/reward_plot_01.png}
+  \caption{Performance of Linear Q-Network on CartPole}
+  \label{fig:01}
+\end{figure}
+\paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to the physics of the environment. The Q function with respect to velocity is symmetric and it is not possible for a linear model to trace a symmetric function. The rendering of the model learnt shows that even when reward is high, the pole is very unstable and the cart keeps moving back and forth a lot.
+
+
+\pagebreak[4]
+\subsection*{MountainCar-v0}
+
+\pagebreak[4]
 
 \subsection{Linear Q-Network with Experience Replay}
-\subsection*{MountainCar-v0}
 \subsection*{CartPole-v0}
 
-\subsection{Deep Q-Network with Experience Replay}
-\subsection*{MountainCar-v0}
-\subsection*{CartPole-v0}
+\paragraph{Experiment Setting} Similar to the setting without experience replay, we used Adam Optimizer with initial learning rate 0.0001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience sampling and train the model for 500 episodes. Figure \ref{fig:02} shows the performance of the model after different number of weight updates to model during training.
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/reward_plot_02.png}
+  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \label{fig:02}
+\end{figure}
+\paragraph{Observations} Experience replay does help the model and the model performs better than that without replay. The number of episodes required for training is reduced because of replay. It is now less dependent on initialization and given sufficient training time is able to learn even with a bad initialization. However, this model also unlearns the policy and the reward diminishes after training for some more time. To avoid this from happening, we use an early stopping criteria where we stop training if we get a average reward of more than 195 for 5 continuous evaluations. The rendering of the learned policy shows that the pole is still oscillating a lot hinting that although the reward is 200, the policy learned is still not what it ideally should be.
 
+\pagebreak[4]
+\subsection*{MountainCar-v0}
+
+\pagebreak[4]
+\subsection{Deep Q-Network}
+\subsection*{CartPole-v0}
+\paragraph{Setting} Since, we find out that linear network in not enough to convincingly solve the CartPole environment due to the non-linearity in the physics of the environment, we try a Multi-layer perceptron with 2 hidden layers to solve the problem. We have 16 units in both layers and we use ReLU as activation function for non-linearity. We use adam optimizer with initial learning rate 0.0005. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:03} shows the performance of the model after different number of weight updates to model during training.
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/reward_plot_04.png}
+  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \label{fig:03}
+\end{figure}
+\paragraph{Observations} We find that Multi-layer Perceptron is able to fully solve the CartPole environment and able to obtain an average reward of 200 consistently. The average reward obtained is also stable for a long time and does not unlearn quickly as the linear ones do. Learning however takes more time as the number of parameters are more and as a reason, a higher learning rate (0.0005) was used. Again, we use a stopping criteria to prevent the model from overfitting because the risk of overfitting is high due to higher number of parameters as compared to linear model. We stop training when we get a reward of 195 or more for 5 continuous evaluations. Finally, by examining the recording of the learned policy, we find that it is better than linear in the sense that pole does not oscillate and almost maintains its position. However, a caveat in the policy learned is that the cart tends to move in one direction either left or right in order to balance the pole. So while the problem of oscillating pole is solved by MLP, the problem of cart moving rapidly to one direction still remains. 
+
+\paragraph{Without Experience Replay} Additionally, we learn an MLP Q Network without experience replay (learning rate = 0.001 and rest of the hyperparameters are same) and find that MLP is able to solve the environment without experience replay and in fact does better in terms of reward stability as compared to linear with experience replay and does not unlearn as fast as linear does. As compared to MLP with experience replay, it take more episodes to converge, The rewards are less stable and its policy is slightly inferior in sense that the pole oscillates a bit. Figure \ref{fig:04} shows the performance of the model after different number of weight updates to model during training.
+
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/reward_plot_03.png}
+  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \label{fig:04}
+\end{figure}
+
+\pagebreak[4]
+\subsection*{MountainCar-v0}
+
+\pagebreak[4]
 \subsection{Duelling Deep Q-Network}
-\subsection*{MountainCar-v0}
 \subsection*{CartPole-v0}
+\paragraph{Setting} For the duelling dqn, we use a two layer MLP woith 16 units each as the shared architecture and then use tow MLPs of 1 layer with 16 units to compute advantage and value function. Similar to MLP, we use Adam Optimizer with initial learning rate of 0.0005 and ggain, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:05} shows the performance of the model after different number of weight updates to model during training.
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/reward_plot_05.png}
+  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \label{fig:05}
+\end{figure}
+\paragraph{Observations} We find that duelling dqn takes lesser number of episodes to learn and is as good as dqn in terms of reward stability. One interesting thing to note was that number of updates was higher than dqn even though episodes were less. Examining the plot, we find out that duelling dqn starts to learn very quickly and the reward go up to 160 just after few updates. Another interesting observation was the recording of the policy learned by duelling dqn. It was most stable of all the policies learned so far. The car position was also stable and so was the pole's angle. There were very small movements and the actions perfectly balanced the pole. 
 
-\subsection{Deep Convolutional Q-Network}
+\pagebreak[4]
+\subsection*{MountainCar-v0}
+
+\pagebreak[4]
+\subsection{Deep Convolutional Double Q-Network}
 \subsection*{SpaceInvaders-v0}
+
+\pagebreak[4]
+\section{Test Results}
+
+\begin{table}[h]
+\centering
+\label{resulttable}
+\begin{tabular}{cccccc}
+\hline
+Env           & Q-Net  & Replay      & Algo        & Reward    & Train Episodes \\ \hline
+CartPole      & Linear & No          & DQN         & 190 $\pm$ 14.37 & 190      \\
+CartPole      & Linear & Yes         & DQN         & 200 $\pm$ 0.00  & 72       \\
+CartPole      & MLP    & No          & DQN         & 200 $\pm$ 0.00  & 3580     \\
+CartPole      & MLP    & Yes         & DQN         & 200 $\pm$ 0.00  & 530      \\
+CartPole      & MLP    & Yes         & DuellingDQN & 200 $\pm$ 0.00  & 390      \\
+MountainCar   & Linear & No          & DQN         &           &          \\
+MountainCar   & Linear & Yes         & DQN         &           &          \\
+MountainCar   & MLP    & No          & DQN         &           &          \\
+MountainCar   & MLP    & Yes         & DQN         &           &          \\
+MountainCar   & MLP    & Yes         & DuellingDQN &           &          \\
+SpaceInvaders & Conv   & Yes         & DoubleDQN   &           &          \\ \hline
+MountainCar   & MLP    & Prioritized & DQN         &           &          \\
+MountainCar   & MLP    & Prioritized & DuellingDQN &           &          \\ \hline
+\end{tabular}
+\caption{Test performance of different algorithms in different environments. Here the column 'Reward' is the average cumulative reward over 100 test episodes and 'Train Episodes' is the number of episodes required for convergence.}
+\end{table}
 
 \pagebreak[4]
 

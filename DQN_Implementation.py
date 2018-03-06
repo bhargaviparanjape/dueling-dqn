@@ -1,19 +1,25 @@
 #!/usr/bin/env python
 from __future__ import print_function
+
+fixedseed = 0
+import numpy as np
+np.random.seed(fixedseed)
+import torch
+torch.manual_seed(fixedseed)
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import random
+random.seed(fixedseed)
+
 import os
 import gym
 import sys
 import copy
 import argparse
-import numpy as np
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Variable
-import random
 import math
 from itertools import count
-import torch.optim as optim
-import torch
 from collections import deque
 from collections import namedtuple
 import copy
@@ -180,12 +186,14 @@ class Prioritized_Replay_Memory():
 class DQN_Agent():
 
     def __init__(self, env_name, network, agent, exp_replay, paramdict, render = False, 
-                 use_cuda=False): 
+                 use_cuda=False, seed = 0): 
 
         # Initialize Agent Parameters
         self.env_name = env_name
         self.env = gym.make(env_name)
+        self.env.seed(seed)
         self.test_env = gym.make(env_name)
+        self.test_env.seed(seed)
         self.use_cuda = use_cuda
         self.loss_function = nn.MSELoss()
         self.exp_replay = exp_replay
@@ -504,7 +512,8 @@ class DQN_Agent():
                         self.logger.printboth('*'*80)
                         self.logger.printboth('EarlyStopping.... Training Complete, Plotting and Recording')
                         self.logger.printboth('*'*80)
-                        self.plot_average_reward(model_save, eval_every)
+                        if not trial:
+                            self.plot_average_reward(model_save, eval_every)
                         return
                 if not trial and model_update_counter % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
@@ -519,7 +528,8 @@ class DQN_Agent():
         self.logger.printboth('*'*80)
         self.logger.printboth('Training Complete')
         self.logger.printboth('*'*80)
-        self.plot_average_reward(model_save, eval_every)
+        if not trial:
+            self.plot_average_reward(model_save, eval_every)
         return
 
     def test(self, model_load=None, render = False, num_test_episodes = 100, evaluate = False, verbose = True, 
@@ -688,7 +698,7 @@ def main(args):
     ## Create Agent
     paramdict = get_parameters(env_name, network, replay, agent, run)
     dqn_agent = DQN_Agent(env_name = env_name, network=network, exp_replay = replay, agent= agent, 
-                          paramdict = paramdict, use_cuda = use_cuda)
+                          paramdict = paramdict, use_cuda = use_cuda, seed=seed)
 
     if args.train:
         dqn_agent.set_logger(model_location=model_location, logfile= 'trainlogs.txt', trial=is_trial)

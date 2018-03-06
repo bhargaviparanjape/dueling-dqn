@@ -434,7 +434,7 @@ class DQN_Agent():
             
             for t in count():
                 
-                if not trial and model_update_counter % cp_every ==0:
+                if not trial and update_counter % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
                     if not os.path.exists(cpdir):
                         os.makedirs(cpdir)

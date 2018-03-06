@@ -3,14 +3,11 @@ from __future__ import print_function
 
 fixedseed = 0
 import numpy as np
-np.random.seed(fixedseed)
 import torch
-torch.manual_seed(fixedseed)
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import random
-random.seed(fixedseed)
 
 import os
 import gym
@@ -685,6 +682,10 @@ def main(args):
     run = args.run
     render = args.render==1
     seed = args.seed
+    
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
 
     ## Check for Saved Models
     model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run,str(seed)]))

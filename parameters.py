@@ -124,7 +124,7 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['cp_every'] = 2000
         paramdict['stop_after'] = 5
         paramdict['burn_in'] = 10000
-        paramdict['num_episodes'] = 1000
+        paramdict['num_episodes'] = 500
 
     elif env=='CartPole-v0' and network=='mlp' and replay=='noexp' and agent=='dqn':
         paramdict['lrate'] = 0.001

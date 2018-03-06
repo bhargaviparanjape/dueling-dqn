@@ -512,7 +512,8 @@ class DQN_Agent():
                         self.logger.printboth('*'*80)
                         self.logger.printboth('EarlyStopping.... Training Complete, Plotting and Recording')
                         self.logger.printboth('*'*80)
-                        self.plot_average_reward(model_save, eval_every)
+                        if not trial:
+                            self.plot_average_reward(model_save, eval_every)
                         return
                 if not trial and model_update_counter % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
@@ -527,7 +528,8 @@ class DQN_Agent():
         self.logger.printboth('*'*80)
         self.logger.printboth('Training Complete')
         self.logger.printboth('*'*80)
-        self.plot_average_reward(model_save, eval_every)
+        if not trial:
+            self.plot_average_reward(model_save, eval_every)
         return
 
     def test(self, model_load=None, render = False, num_test_episodes = 100, evaluate = False, verbose = True, 

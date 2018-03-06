@@ -47,6 +47,23 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['burn_in'] = 10000
         paramdict['memory_size'] = 50000
 
+
+    elif env=='MountainCar-v0' and network=='linear' and replay=='priority' and agent=='dqn':
+        paramdict['lrate'] = 0.0001
+        paramdict['gamma'] = 1
+        paramdict['eps_strat'] = 'linear_decay'
+        paramdict['eps_start'] = 0.9
+        paramdict['eps_end'] = 0.05
+        paramdict['eps_decay'] = 1e4
+        paramdict['eval_every'] = 10000
+        paramdict['log_every'] = 10
+        paramdict['cp_every'] = 10000
+        paramdict['batch_size'] = 32
+        paramdict['stop_after'] = 5
+        paramdict['num_episodes'] = 20000
+        paramdict['burn_in'] = 10000
+        paramdict['memory_size'] = 50000
+
     elif env=='MountainCar-v0' and network=='mlp' and replay=='exp' and agent=='dqn':
         paramdict['lrate'] = 0.0001
         paramdict['gamma'] = 1
@@ -80,15 +97,15 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['memory_size'] = 50000
 
     elif env=='MountainCar-v0' and network=='mlp' and replay=='priority' and agent=='dqn':
-        paramdict['lrate'] = 0.00025
+        paramdict['lrate'] = 0.0001
         paramdict['gamma'] = 1
         paramdict['eps_strat'] = 'linear_decay'
         paramdict['eps_start'] = 1
         paramdict['eps_end'] = 0.05
-        paramdict['eps_decay'] = 1e4
+        paramdict['eps_decay'] = 1e6
         paramdict['eval_every'] = 10000
-        paramdict['log_every'] = 100
-        paramdict['cp_every'] = 10000
+        paramdict['log_every'] = 5
+        paramdict['cp_every'] = 100000
         paramdict['target_update'] = 1
         paramdict['batch_size'] = 32
         paramdict['stop_after'] = 5
@@ -108,7 +125,7 @@ def get_parameters(env, network, replay, agent, run='0'):
         paramdict['cp_every'] = 10000
         paramdict['batch_size'] = 32
         paramdict['stop_after'] = 5
-        paramdict['num_episodes'] = 50000
+        paramdict['num_episodes'] = 20000
         paramdict['burn_in'] = 10000
         paramdict['memory_size'] = 50000
 

@@ -134,6 +134,8 @@ As at each update the role of $Q _{w _1}$ and $Q _{w _2}$ is determined stochast
 In this homework, we will also ask you to implement the \emph{dueling deep Q-network} described in~\cite{wang2015dueling}. This amounts to a slightly different Q-network architecture from the 
 one in~\cite{mnih2013playing, mnih2015human}. Most models will be trained using \emph{experience replay}~\cite{mnih2013playing, mnih2015human}, meaning that the $4$-tuples $(s, a, r, s')$ will be sampled from the replay buffer rather than coming directly from the online experience of the agent.
 
+\pagebreak[4]
+
 \section{Theory Questions}
 \subsection*{Question 1.a \textbf{[5pts]}}
 
@@ -157,6 +159,8 @@ $$f(\mu_{k-1}, x_k) = \frac{x_k - \mu_{k-1}}{k}$$
 Hence mean $\mu_k$ can be computed  incrementally (online) at every time step $k$ using the above update equation with $f$ as defined.
 \end{solution}
 
+\pagebreak[4]
+
 \subsection*{Question 1.b \textbf{[5pts]}}
 The function $f(x_k, \mu_{k-1})$ represents the error between the current estimate of the mean, $\mu_{k-1}$, and the true mean at time $k$, $\mu_k$. Consider the following scenario - an agent follows some policy in its environment, and receives a return $G_t$ from an episode starting at state $s_t$. We would like to update the value of state $s_t$, $V(s_t)$, using the newly obtained $G_t$. 
 
@@ -168,8 +172,25 @@ The function $f(x_k, \mu_{k-1})$ represents the error between the current estima
 
 \noindent
 \begin{solution}
-Let $s_t = s$ and $N(s_t) = k$ at time $t$. Hence, 
+Let $s_t = s$ and $N(s_t) = k$ at time $t$. Hence, state $s$ was encountered $k$ number of times before time $t$ with returns from episodes for these $k$ occurrences being ${G_1, G_2, ... , G_k}$. Hence at time $t$, we have,
+$$V(s_t) = \frac{G_1 + G_2 + ... + G_k}{k}$$
+At time $t$, the datapoint $G_t$ is added to this average to compute a new value function for state $s_t = s$. Let's call it $V_{new}(s_t)$. Then,
+$$V_{new}(s_t) = \frac{G_1 + G_2 + ... + G_k + G_t}{k+1}$$
+Again we have,
+$$(k+1)V_{new}(s_t) = kV(s_t) + G_t$$
+$$(k+1)V_{new}(s_t) = (k + 1 - 1)V(s_t) + G_t$$
+$$(k+1)V_{new}(s_t) = (k + 1)V(s_t) + G_t - V(s_t)$$
+$$V_{new}(s_t) = \frac{(k + 1)V(s_t) + G_t - V(s_t)}{(k+1)}$$
+$$V_{new}(s_t) = V(s_t) + \frac{G_t - V(s_t)}{(k+1)}$$
+$$N_{new}(s_t) = k+1$$
+Hence we have,
+$$V_{new}(s_t) = V(s_t) + \frac{G_t - V(s_t)}{N_{new}(s_t)}$$
+This update equation for $V(s_t)$ is similar to the Monte-Carlo update equation of the form:
+$$V_{new}(s_t) = V(s_t) + \frac{1}{\alpha}(G_t - V(s_t))$$
+with $\frac{1}{N(s_t)} = \alpha$
 \end{solution}
+
+\pagebreak[4]
 
 \subsection*{Question 1.c \textbf{[5pts]}}
 The update you derived in Question 1.b is based on the return from the entire episode, $G_t$. However, this method only learns from the end of the episode. Instead, it is possible to accelerate the learning process by bootstrapping. 
@@ -181,22 +202,105 @@ The update you derived in Question 1.b is based on the return from the entire ep
 
 \noindent
 \begin{solution}
+$G_t$ is the reward for the current episode starting at state $s_t$ at time $t$ and $V(s_{t+1})$ is the average expected reward for this episode starting at state $s_{t+1}$ at time $t+1$ after a reward $r$ has already been achieved. Hence, $G_t$ will include the reward $r$ and the expected reward from next time step $V(s_{t+1})$. I.e.,
+% $$G_t = \mathbb{E}_{a \in A}r(s_t, a) + V(s_{t+1})$$
+$$G_t = r + V(s_{t+1})$$
+Putting this value for $G_t$ in previous update equation, we get:
+$$V_{new}(s_t) = V(s_t) + \frac{r + V(s_{t+1}) - V(s_t)}{N_{new}(s_t)}$$
+This update equation for $V(s_t)$ is similar to the Temporal Difference[TD(0)] update equation of the form:
+$$V_{new}(s_t) = V(s_t) + \frac{1}{\alpha}(r + V(s_{t+1}) - V(s_t))$$
+with $\frac{1}{N(s_t)} = \alpha$
 \end{solution}
 
+\pagebreak[4]
 
 \subsection*{Question 2.a \textbf{[5pts]}}
 Update~\ref{eq:tab_qlearn} defines the TD update when the representation of the states and actions are in tabular form. Show that for a certain construction of the feature function $\phi$, the tabular representation representation is a special case of the TD update~\ref{eq:fapp_qlearn} where the function in $\mathcal Q$ is of the form $Q _w(s, a) = w ^T \phi(s, a)$. Give detailed description about your feature function and your proof for equivalence to earn full credits. \\
 
 \noindent
 \begin{solution}
+Update 1 is of the form:
+	$$Q'(s, a) := Q(s, a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q(s', a') 
+				- Q(s, a) 
+		\right)$$
+We have,
+$$Q_{w}(s, a) = w^T \phi(s, a)$$
+$$\nabla _w Q_w (s, a)  = \phi(s, a)^T $$
+Using the update equation for w and the linear function for 
+	$$w' := w + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(s', a') 
+				- Q _w(s, a) 
+		\right) \nabla _w 
+			Q _w (s, a)$$
+	$$w' := w + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(s', a') 
+				- Q _w(s, a) 
+		\right)\phi(s, a)^T $$
+Substituting the updated value $w'$ to compute $Q'_{w}(s, a)$, we get
+$$Q'_{w}(s, a) = w'^T\phi(s, a)$$
+	$$Q'_{w}(s, a) := \left[w + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(s', a') 
+				- Q _w(s, a) 
+		\right)\phi(s, a)\right]^T\phi(s, a)$$
+
+	$$Q'_{w}(s, a) := w^T\phi(s, a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(s', a') 
+				- Q _w(s, a) 
+		\right)\phi(s, a)^T\phi(s, a)$$
+	$$Q'_{w}(s, a) := Q_{w}(s, a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(s', a') 
+				- Q _w(s, a) 
+		\right)\phi(s, a)^T\phi(s, a)$$
+In order equate this value for $Q'_{w}(s, a)$ to Update 1, we get:
+$$\phi(s, a)^T\phi(s, a) = 1$$
+That is:
+$$||\phi(s, a)|| = 1$$
+Hence, if the feature vectors are normalized to norm-1, the function approximation setting reduces to the tabular setting
 \end{solution}
 
+\pagebreak[4]
+
 \subsection*{Question 2.b \textbf{[5pts]}}
-State aggregation improves generalization by grouping states together, with one table entry used for each group. Let $\mathcal{X}: s \to x$ be the grouping function that maps a input state $s$ to its group $x$ and usually, the number of groups $|X| \ll |S|$. During training, whenever a state in a group is encountered, the groups' entry and the action $a$ is used to determine the state's value, and when the state is updated, the group's entry is updated. Assume $\mathcal Q$ is still in the the form $Q _w(s, a) = w ^T \phi(s, a)$. Show that a tabular representation with state aggregations is also a special case of TD update~\ref{eq:fapp_qlearn} under certain construction of feature function $\phi$. Give detailed description about your feature function and your proof for equivalence to earn full credits. 
+State aggregation improves generalization by grouping states together, with one table entry used for each group. Let $\mathcal{X}: s \to x$ be the gouping function that maps a input state $s$ to its group $x$ and usually, the number of groups $|X| \ll |S|$. During training, whenever a state in a group is encountered, the groups' entry and the action $a$ is used to determine the state's value, and when the state is updated, the group's entry is updated. Assume $\mathcal Q$ is still in the the form $Q _w(s, a) = w ^T \phi(s, a)$. Show that a tabular representation with state aggregations is also a special case of TD update~\ref{eq:fapp_qlearn} under certain construction of feature function $\phi$. Give detailed description about your feature function and your proof for equivalence to earn full credits. 
 
 \noindent
 
 \begin{solution}
+Consider the set of states $S_x = {s_1, s_2, ..., s_k}$, that are all mapped to the group $x$. Then, 
+$$\mathcal{X}(s) = x, \quad \forall s \in S_x$$
+$$Q(s,a) = Q(x,a), \quad \forall s \in S_x$$
+The weight update equation for every state $s$ in $S_x$ is then of the form:
+	$$w' := w + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(\mathcal{X}(s'), a') 
+				- Q_w(x, a) 
+		\right)\phi(s, a)^T \quad \forall s \in S_x $$
+And the updated value for $Q'_{w}(s, a)$ [$Q'_{w}(x, a)$] is as follows:
+	$$Q'_{w}(s, a) := w^T\phi(s, a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(\mathcal{X}(s'), a') 
+				- Q _w(x, a) 
+		\right)\phi(s, a)^T\phi(s, a) \quad \forall s \in S_x $$
+	$$Q'_{w}(s, a) := Q_w(x,a) + 
+		\alpha \left( 
+			r + \gamma \max _{a' \in A} Q _w(\mathcal{X}(s'), a') 
+				- Q _w(x, a) 
+		\right)\phi(s, a)^T\phi(s, a) \quad \forall s \in S_x$$
+In order equate this value for $Q'_{w}(s, a)$ to Update 1, the following conditions must hold:
+$$Q_w(x,a) = Q_w(s,a) = w^T\phi(s, a) \quad \forall s \in S_x$$
+and, 
+$$||\phi(s, a)|| = 1$$ 
+The first constraint implies that for all states that are mapped to the same group and hence have the same q-value, the feature function $\phi$ has to be identical for all these states. That is:
+$$\phi(s, a) = \phi(s', a) = \phi(x,a) \quad \forall (s,s') \in S_x , a\in A$$
+We can hence define feature functions over groups according to the mapping $\mathcal{X}$
+Thus, if the feature vectors are normalized to norm-1 and all feature functions of states mapped to the same group are identical, the function approximation setting reduces to the tabular setting.
 \end{solution}
 
 
@@ -347,15 +451,33 @@ homeworks in your class projects.
 This is a challenging assignment. 
 \textbf{Please start early!}
 
+\pagebreak[4]
+
+\section{Programming Implementation}
+\subsection{Linear Q-Network without Experience Replay}
+\subsection*{MountainCar-v0}
+\subsection*{CartPole-v0}
+
+\subsection{Linear Q-Network with Experience Replay}
+\subsection*{MountainCar-v0}
+\subsection*{CartPole-v0}
+
+\subsection{Deep Q-Network with Experience Replay}
+\subsection*{MountainCar-v0}
+\subsection*{CartPole-v0}
+
+\subsection{Duelling Deep Q-Network}
+\subsection*{MountainCar-v0}
+\subsection*{CartPole-v0}
+
+\subsection{Deep Convolutional Q-Network}
+\subsection*{SpaceInvaders-v0}
+
+\pagebreak[4]
 
 \nocite{*}
 \bibliographystyle{plain}
 \bibliography{deeprlhw2}
-
-
-\newpage
-\textbf{Write-up for implementation section: }
-
 
 \end{document}
 

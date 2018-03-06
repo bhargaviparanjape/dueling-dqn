@@ -420,7 +420,7 @@ class DQN_Agent():
         self.logger.printboth('*'*80)
         t_counter = deque(maxlen=stop_after)
         update_counter = 1
-        model_update_counter = 1
+        model_update_counter = 0
         max_average_reward = float('-Inf')
 
         #Initialize burn-in memory
@@ -516,7 +516,7 @@ class DQN_Agent():
                     cpdir = os.path.join(model_save ,'checkpoint')
                     if not os.path.exists(cpdir):
                         os.makedirs(cpdir)
-                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
+                    self.model.save_model(os.path.join(cpdir,str(model_update_counter-1)))
                 if done:
                     if verbose and episode % log_every == 0:
                         self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))

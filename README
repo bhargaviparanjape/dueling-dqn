@@ -1,1 +1,47 @@
-Pytorch implementation of dueling deep Q-networks for Cartpole, MountainCar and SpaceInvaders
+Pytorch implementation of Linear and Deep Q-networks for Cartpole, MountainCar and SpaceInvaders
+
+Files:
+    DQN_Implementation.py : Contains main code with different implementations which could be run
+                            by passing the arguments to the code
+    parameters.py         : Contains Hyperparameters for all the different implementations
+    SumTree.py            : Class for SumTree Data Structure for Prioritized Replay
+    
+To Run the Code:
+    
+    $ python DQN_Implementation.py --env CartPole-v0 --network mlp --replay exp --agent dqn --trial 1
+    
+    This code takes bunch of arguments:
+    
+    env             : Gym Environment ('CartPole-v0', 'MountainCar-v0', 'SpaceInvaders-v0')
+                      Default: 'CartPole-v0'
+    network         : Network Architechture ('linear', 'mlp', 'conv')
+                      'linear' for a Linear Q Network, 'mlp' for Deep Q with MultiLayer Perceptron,
+                      'conv' for Convolutional DeepQ Network
+                      Default: 'mlp'
+    replay          : Which Replay Technique to Use ('noexp', 'exp', 'priority')
+                      'noexp' for without experience replay, 'exp' for random sampling from experience
+                      and 'priority' for prioritized sampling from experience
+                      Default: 'exp'
+    agent           : Which algorithm to run ('dqn', 'duelling', 'doubledqn')
+                      'dqn' for vanilla Deep Q Network, 'duelling' for duelling DQN [1] and 'doubledqn'
+                      for Double DQN Implementation [2]
+                      Default: 'dqn'
+    trial           : Is trial (0,1)
+                      0 if the model is run as a trial and model saving is not required and 1 if model
+                      run is to be saved
+                      Default: 0
+    train           : Train or Test (0,1)
+                      1 if the model is to be trained 0 if to be tested
+                      Default: 1
+    load            : Model File to Load (str). No Default. Required when train is 0
+    seed            : Random Seed (int)
+                      Default:0
+    run             : Which Hyperparamter Setting to choose from parameters.py (str)
+                      Deafult:'0'
+    
+    
+    
+[1] Ziyu Wang, Tom Schaul, Matteo Hessel, Hado van Hasselt, Marc Lanctot, and Nando de Freitas. Dueling 
+    network architectures for deep reinforcement learning. arXiv preprint arXiv:1511.06581, 2015
+[2] Hado  Van  Hasselt,  Arthur  Guez,  and  David  Silver.   Deep  reinforcement  learning  with 
+    double q-learning.  2016.

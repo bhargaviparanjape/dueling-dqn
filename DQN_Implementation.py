@@ -3,14 +3,11 @@ from __future__ import print_function
 
 fixedseed = 0
 import numpy as np
-np.random.seed(fixedseed)
 import torch
-torch.manual_seed(fixedseed)
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import random
-random.seed(fixedseed)
 
 import os
 import gym
@@ -422,7 +419,7 @@ class DQN_Agent():
         self.logger.printboth('*'*80)
         t_counter = deque(maxlen=stop_after)
         update_counter = 1
-        model_update_counter = 1
+        model_update_counter = 0
         max_average_reward = float('-Inf')
 
         #Initialize burn-in memory
@@ -436,6 +433,12 @@ class DQN_Agent():
                 cur_state = self.get_frames(cur_state)
             
             for t in count():
+                
+                if not trial and update_counter % cp_every ==0:
+                    cpdir = os.path.join(model_save ,'checkpoint')
+                    if not os.path.exists(cpdir):
+                        os.makedirs(cpdir)
+                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
 
                 #Sample random state, sample action from e-greedy policy and take step in enviroment
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
@@ -515,11 +518,6 @@ class DQN_Agent():
                         if not trial:
                             self.plot_average_reward(model_save, eval_every)
                         return
-                if not trial and model_update_counter % cp_every ==0:
-                    cpdir = os.path.join(model_save ,'checkpoint')
-                    if not os.path.exists(cpdir):
-                        os.makedirs(cpdir)
-                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
                 if done:
                     if verbose and episode % log_every == 0:
                         self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
@@ -607,6 +605,9 @@ class DQN_Agent():
         if self.network == 'conv':
             state = self.get_frames(state)
         state_var = Variable(torch.FloatTensor(state).unsqueeze(0))
+        if self.use_cuda and torch.cuda.is_available():
+            state_var = state_var.cuda()
+            
         if self.agent == 'duelling':
             vvalues, avalues = self.model(state_var)
             qvalues = vvalues.repeat(1, self.env.action_space.n) + \
@@ -623,6 +624,8 @@ class DQN_Agent():
             ## Code to assign initial priorities to burn-in for prioritized replay
             if self.exp_replay == "priority":
                 next_state_var = Variable(torch.FloatTensor(next_state))
+                if self.use_cuda and torch.cuda.is_available():
+                    next_state_var = next_state_var.cuda()
                 if self.agent == 'duelling':
                     ## Target model not required since they are identical
                     nvvalues, navalues = self.model(next_state_var)
@@ -685,6 +688,10 @@ def main(args):
     run = args.run
     render = args.render==1
     seed = args.seed
+    
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
 
     ## Check for Saved Models
     model_location = os.path.join('saved_models','_'.join([env_name,network,str(replay),agent,run,str(seed)]))

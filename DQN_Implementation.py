@@ -605,6 +605,9 @@ class DQN_Agent():
         if self.network == 'conv':
             state = self.get_frames(state)
         state_var = Variable(torch.FloatTensor(state).unsqueeze(0))
+        if self.use_cuda and torch.cuda.is_available():
+            state_var = state_var.cuda()
+            
         if self.agent == 'duelling':
             vvalues, avalues = self.model(state_var)
             qvalues = vvalues.repeat(1, self.env.action_space.n) + \
@@ -621,6 +624,8 @@ class DQN_Agent():
             ## Code to assign initial priorities to burn-in for prioritized replay
             if self.exp_replay == "priority":
                 next_state_var = Variable(torch.FloatTensor(next_state))
+                if self.use_cuda and torch.cuda.is_available():
+                    next_state_var = next_state_var.cuda()
                 if self.agent == 'duelling':
                     ## Target model not required since they are identical
                     nvvalues, navalues = self.model(next_state_var)

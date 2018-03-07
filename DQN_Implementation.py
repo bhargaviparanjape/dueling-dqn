@@ -617,7 +617,7 @@ class DQN_Agent():
             qvalues = self.model(state_var)
         while len(self.replay.memory) < self.replay.burn_in:
             ## Action still follows policy with very large exploration
-            action = self.env.action_space.sample()
+            action = self.epsilon_greedy_policy(qvalues, eps_fixed=0.9)
             next_state, reward, done, _ = self.env.step(action)
             if self.network == 'conv':
                 next_state = self.get_frames(cur_frame=next_state, previous_frames=state)

@@ -240,6 +240,7 @@ class DQN_Agent():
             eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.*update_counter/eps_decay)
         elif eps_strat=='log_decay':
             raise NotImplementedError()
+        return eps_threshold
             
     def epsilon_greedy_policy(self, qvalues, update_counter=None, eps_fixed=None):
         sample = random.random()

@@ -435,11 +435,11 @@ class DQN_Agent():
             
             for t in count():
                 
-                if not trial and update_counter % cp_every ==0:
+                if not trial and (update_counter-1) % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
                     if not os.path.exists(cpdir):
                         os.makedirs(cpdir)
-                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
+                    self.model.save_model(os.path.join(cpdir,str(update_counter-1)))
 
                 #Sample random state, sample action from e-greedy policy and take step in enviroment
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))

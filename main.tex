@@ -335,6 +335,23 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 
 \pagebreak[4]
 \subsection*{MountainCar-v0}
+\paragraph{Experimental Settings} There are two weights in the linear network excluding the bias term. We use the Adam optimizer over Smoother L1 Loss (Hubert Loss) with initial learning rate of 0.0001. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. To stabilize training we use a target network whose parameters are synced every 10,000 updates to the parameters of the learned q-function. We set discount factor to 1. We also employ the following reward function update rule at terminal states to further stabilize the training procedure:  Target is set to $r$ only if next state[0] $>$ 0.5 and is $r+γQ$ otherwise. We train for 10,000 episodes (2 million updates). Figure \ref{fig:mn02} shows the performance of the model measured in terms of average reward for 20 episodes after different number of weight updates to the model during training.\\
+\begin{comment}
+% This is supposed to be put in the table in Section 3 and we need to comment on that table too which I think we can do together or I can take care of that part. 
+\textcolor{red}{Best Performance on validate:  Mean= -125.700000, Std= 17.286122}\\
+\textcolor{red}{Best Performance on test: Mean= -124.710000, Std= 17.482731}\\
+\textcolor{red}{Best Occurs after 40,000 updates ~200 episodes}
+\end{comment}
+
+\begin{figure}[h]
+  \centering
+  \vspace{-5mm}
+  \includegraphics[width=0.8\linewidth]{figures/linear_noexp_hubert_target_reward_plot.png}
+  \caption{Performance of Linear Q-Network on MountainCar with no experience replay}
+  \label{fig:mn02}
+\end{figure}
+
+\paragraph{Observations} TBD
 
 \pagebreak[4]
 
@@ -353,6 +370,8 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 
 \pagebreak[4]
 \subsection*{MountainCar-v0}
+
+\paragraph{Experimental Settings} Similar to the setting without experience replay, we use Adam Optimizer (initial learning rate = 0.0001) with Hubert loss. We use an epsilon greedy policy for evaluation during training and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use batch size of 32
 
 \pagebreak[4]
 \subsection{Deep Q-Network}
@@ -414,7 +433,7 @@ CartPole      & Linear & Yes         & DQN         & 200 $\pm$ 0.00  & 215      
 CartPole      & MLP    & No          & DQN         & 200 $\pm$ 0.00  & 1680     \\
 CartPole      & MLP    & Yes         & DQN         & 200 $\pm$ 0.00  & 420      \\
 CartPole      & MLP    & Yes         & DuellingDQN & 200 $\pm$ 0.00  & 310      \\
-MountainCar   & Linear & No          & DQN         &           &          \\
+MountainCar   & Linear & No          & DQN         & -124.71 $\pm$ 17.48  & XXX       \\
 MountainCar   & Linear & Yes         & DQN         &           &          \\
 MountainCar   & MLP    & No          & DQN         &           &          \\
 MountainCar   & MLP    & Yes         & DQN         &           &          \\
@@ -425,6 +444,8 @@ MountainCar   & MLP    & Prioritized & DuellingDQN &           &          \\ \hl
 \end{tabular}
 \caption{Test performance of different algorithms in different environments. Here the column 'Reward' is the average cumulative reward over 100 test episodes and 'Train Episodes' is the number of episodes required for convergence.}
 \end{table}
+
+\paragraph{Reproducibility} We have set seeds to ensure that all experiments and results are fully reproducible. In the code, the seed can be set using "--seed" argument during training. The seeds for different experiments in order of their position in table are 91, 91, 9, 1, 0, X, X, X, X, X, 0, X, X. During test, all seeds are set to 0 by default and no argument needs to be passed.
 
 \pagebreak[4]
 

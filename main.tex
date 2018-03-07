@@ -322,7 +322,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 
 \subsection{Linear Q-Network without Experience Replay}
 \subsection*{CartPole-v0}
-\paragraph{Experiment Setting} There were only four weights in the network one corresponding to each variable in the state and a bias. To learn these weights, we used Adam Optimizer with initial learning rate 0.0001 to optimize the loss. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. The model was trained for 500 episodes. Figure \ref{fig:01} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Experiment Setting} There were only four weights in the network one corresponding to each variable in the state and a bias. To learn these weights, we used Adam Optimizer with initial learning rate 0.0001 to optimize the loss. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. The model was trained for 500 episodes. Figure \ref{fig:01} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -330,7 +330,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole}
   \label{fig:01}
 \end{figure}
-\paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to the physics of the environment. The Q function with respect to velocity is symmetric and it is not possible for a linear model to trace a symmetric function. The rendering of the model learnt shows that even when reward is high, the pole is very unstable and the cart keeps moving back and forth a lot.
+\paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to the physics of the environment. The Q function with respect to velocity is symmetric and it is not possible for a linear model to trace a symmetric function. The rendering of the model learned shows that even when reward is high, the pole is very unstable and the cart keeps moving to one direction.
 
 
 \pagebreak[4]
@@ -341,7 +341,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \subsection{Linear Q-Network with Experience Replay}
 \subsection*{CartPole-v0}
 
-\paragraph{Experiment Setting} Similar to the setting without experience replay, we used Adam Optimizer with initial learning rate 0.0001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience sampling and train the model for 500 episodes. Figure \ref{fig:02} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Experiment Setting} Similar to the setting without experience replay, we used Adam Optimizer with initial learning rate 0.0001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience sampling and train the model for 500 episodes. Figure \ref{fig:02} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -349,7 +349,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
   \label{fig:02}
 \end{figure}
-\paragraph{Observations} Experience replay does help the model and the model performs better than that without replay. The number of episodes required for training is reduced because of replay. It is now less dependent on initialization and given sufficient training time is able to learn even with a bad initialization. However, this model also unlearns the policy and the reward diminishes after training for some more time. To avoid this from happening, we use an early stopping criteria where we stop training if we get a average reward of more than 195 for 5 continuous evaluations. The rendering of the learned policy shows that the pole is still oscillating a lot hinting that although the reward is 200, the policy learned is still not what it ideally should be.
+\paragraph{Observations} Experience replay does help the model and the model performs better than that without replay in a sense that the learned policy is able to reach a reward of 200. The number of episodes required for training is also reduced because of replay. However the model is still dependent on initialization and is able to reach only upto 100 reward for bad initializations. This model also unlearns the policy and the reward diminishes after training for some more time. To avoid this from happening, we use an early stopping criteria where we stop training if we get a average reward of more than 195 for 5 continuous evaluations. The rendering of the learned policy shows that the cart moves back and forth rapidly and pole is still oscillating a lot hinting that although the reward is 200, the policy learned is still not what it ideally should be.
 
 \pagebreak[4]
 \subsection*{MountainCar-v0}
@@ -357,7 +357,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \pagebreak[4]
 \subsection{Deep Q-Network}
 \subsection*{CartPole-v0}
-\paragraph{Setting} Since, we find out that linear network in not enough to convincingly solve the CartPole environment due to the non-linearity in the physics of the environment, we try a Multi-layer perceptron with 2 hidden layers to solve the problem. We have 16 units in both layers and we use ReLU as activation function for non-linearity. We use adam optimizer with initial learning rate 0.0005. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:03} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Setting} Since, we find out that linear network in not enough to convincingly solve the CartPole environment due to the non-linearity in the physics of the environment, we try a Multi-layer perceptron with 2 hidden layers to solve the problem. We have 16 units in both layers and we use ReLU as activation function for non-linearity. We use adam optimizer with initial learning rate 0.001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:03} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -365,9 +365,9 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
   \label{fig:03}
 \end{figure}
-\paragraph{Observations} We find that Multi-layer Perceptron is able to fully solve the CartPole environment and able to obtain an average reward of 200 consistently. The average reward obtained is also stable for a long time and does not unlearn quickly as the linear ones do. Learning however takes more time as the number of parameters are more and as a reason, a higher learning rate (0.0005) was used. Again, we use a stopping criteria to prevent the model from overfitting because the risk of overfitting is high due to higher number of parameters as compared to linear model. We stop training when we get a reward of 195 or more for 5 continuous evaluations. Finally, by examining the recording of the learned policy, we find that it is better than linear in the sense that pole does not oscillate and almost maintains its position. However, a caveat in the policy learned is that the cart tends to move in one direction either left or right in order to balance the pole. So while the problem of oscillating pole is solved by MLP, the problem of cart moving rapidly to one direction still remains. 
+\paragraph{Observations} We find that Multi-layer Perceptron is able to fully solve the CartPole environment and able to obtain an average reward of 200 consistently irrespective of initialization. The average reward obtained is also stable for a long time and does not unlearn quickly as the linear ones do. Learning however takes more time as the number of parameters are more and as a reason, a higher learning rate (0.001) was used. Again, we use a stopping criteria to prevent the model from overfitting because the risk of overfitting is high due to higher number of parameters as compared to linear model. We stop training when we get a reward of 195 or more for 5 continuous evaluations. Finally, by examining the recording of the learned policy, we find that it is better than linear in the sense that pole does not oscillate and almost maintains its position. However, a caveat in the policy learned is that the cart tends to move in one direction either left or right in order to balance the pole.
 
-\paragraph{Without Experience Replay} Additionally, we learn an MLP Q Network without experience replay (learning rate = 0.001 and rest of the hyperparameters are same) and find that MLP is able to solve the environment without experience replay and in fact does better in terms of reward stability as compared to linear with experience replay and does not unlearn as fast as linear does. As compared to MLP with experience replay, it take more episodes to converge, The rewards are less stable and its policy is slightly inferior in sense that the pole oscillates a bit. Figure \ref{fig:04} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Without Experience Replay} Additionally, we learn an MLP Q Network without experience replay and find that MLP is able to solve the environment without experience replay and in fact does better in terms of reward stability as compared to linear with experience replay and does not unlearn as fast as linear does. As compared to MLP with experience replay, it take more episodes to converge, The rewards are less stable and its policy is slightly inferior in sense that the pole oscillates a bit. Figure \ref{fig:04} shows the performance of the model after different number of weight updates to model during training.
 
 \begin{figure}[h]
   \centering
@@ -383,7 +383,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \pagebreak[4]
 \subsection{Duelling Deep Q-Network}
 \subsection*{CartPole-v0}
-\paragraph{Setting} For the duelling dqn, we use a two layer MLP woith 16 units each as the shared architecture and then use tow MLPs of 1 layer with 16 units to compute advantage and value function. Similar to MLP, we use Adam Optimizer with initial learning rate of 0.0005 and ggain, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.9 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:05} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Setting} For the duelling dqn, we use a two layer MLP woith 16 units each as the shared architecture and then use tow MLPs of 1 layer with 16 units to compute advantage and value function. Similar to MLP, we use Adam Optimizer with initial learning rate of 0.001 and again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:05} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -391,7 +391,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
   \label{fig:05}
 \end{figure}
-\paragraph{Observations} We find that duelling dqn takes lesser number of episodes to learn and is as good as dqn in terms of reward stability. One interesting thing to note was that number of updates was higher than dqn even though episodes were less. Examining the plot, we find out that duelling dqn starts to learn very quickly and the reward go up to 160 just after few updates. Another interesting observation was the recording of the policy learned by duelling dqn. It was most stable of all the policies learned so far. The car position was also stable and so was the pole's angle. There were very small movements and the actions perfectly balanced the pole. 
+\paragraph{Observations} We find that duelling dqn takes lesser number of episodes to learn and is as good as dqn in terms of reward stability. One interesting thing to note was that number of updates was higher than dqn even though episodes were less. Examining the plot, we find out that duelling dqn starts to learn very quickly and the reward go up to 193 just after first 5000 weight updates. Another interesting observation was the recording of the policy learned by duelling dqn. It was most stable of all the policies learned so far. The car position was also stable and so was the pole's angle. There were very small movements and the actions perfectly balanced the pole. 
 
 \pagebreak[4]
 \subsection*{MountainCar-v0}
@@ -409,11 +409,11 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \begin{tabular}{cccccc}
 \hline
 Env           & Q-Net  & Replay      & Algo        & Reward    & Train Episodes \\ \hline
-CartPole      & Linear & No          & DQN         & 190 $\pm$ 14.37 & 190      \\
-CartPole      & Linear & Yes         & DQN         & 200 $\pm$ 0.00  & 72       \\
-CartPole      & MLP    & No          & DQN         & 200 $\pm$ 0.00  & 3580     \\
-CartPole      & MLP    & Yes         & DQN         & 200 $\pm$ 0.00  & 530      \\
-CartPole      & MLP    & Yes         & DuellingDQN & 200 $\pm$ 0.00  & 390      \\
+CartPole      & Linear & No          & DQN         & 183.87 $\pm$ 22.37 & 300      \\
+CartPole      & Linear & Yes         & DQN         & 200 $\pm$ 0.00  & 215       \\
+CartPole      & MLP    & No          & DQN         & 200 $\pm$ 0.00  & 1680     \\
+CartPole      & MLP    & Yes         & DQN         & 200 $\pm$ 0.00  & 420      \\
+CartPole      & MLP    & Yes         & DuellingDQN & 200 $\pm$ 0.00  & 310      \\
 MountainCar   & Linear & No          & DQN         &           &          \\
 MountainCar   & Linear & Yes         & DQN         &           &          \\
 MountainCar   & MLP    & No          & DQN         &           &          \\

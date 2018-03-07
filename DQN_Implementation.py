@@ -146,12 +146,11 @@ class Replay_Memory():
 
 class Prioritized_Replay_Memory():
     def __init__(self, memory_size=50000, burn_in=50000):
-        self.logger.printboth("Initializing Prioritized Replay Memory")
         self.size = memory_size
         self.burn_in = burn_in
         self.tree = SumTree(self.size)
         self.eta = 0.01
-        self.alpha = 0.65
+        self.alpha = 0.90
         self.memory = []
 
     def getPriority(self, error):
@@ -426,6 +425,7 @@ class DQN_Agent():
 
         #Initialize burn-in memory
         if self.exp_replay=='exp' or self.exp_replay=='priority':
+            self.logger.printboth("Initializing {0} Replay Memory".format(self.exp_replay))
             self.burn_in_memory()
             
         for episode in range(1,self.num_episodes+1):
@@ -617,7 +617,7 @@ class DQN_Agent():
             qvalues = self.model(state_var)
         while len(self.replay.memory) < self.replay.burn_in:
             ## Action still follows policy with very large exploration
-            action = self.epsilon_greedy_policy(qvalues, eps_fixed=0.9)
+            action = self.env.action_space.sample()
             next_state, reward, done, _ = self.env.step(action)
             if self.network == 'conv':
                 next_state = self.get_frames(cur_frame=next_state, previous_frames=state)

@@ -45,8 +45,11 @@ class baseQNetwork(nn.Module):
     def forward(self):
         pass
 
-    def load_model(self, model_file):
-        self.load_state_dict(torch.load(model_file))
+    def load_model(self, model_file, location='cpu'):
+        if location=='cpu':
+            self.load_state_dict(torch.load(model_file, map_location=lambda storage, loc: storage))
+        else:
+            self.load_state_dict(torch.load(model_file))
 
     def save_model(self, file_name):
         torch.save(self.state_dict(), file_name)
@@ -540,7 +543,9 @@ class DQN_Agent():
         if not evaluate:
             if self.use_cuda and torch.cuda.is_available():
                 self.model.cuda()
-            self.model.load_model(model_load)
+                self.model.load_model(model_load)
+            else:
+                self.model.load_model(model_load, location='cpu')
 
         if render:
             model_load_loc, model_load_file = os.path.split(model_load)

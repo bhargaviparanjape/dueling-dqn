@@ -446,11 +446,11 @@ class DQN_Agent():
             
             for t in count():
                 
-                if not trial and update_counter % cp_every ==0:
+                if not trial and (update_counter-1) % cp_every ==0:
                     cpdir = os.path.join(model_save ,'checkpoint')
                     if not os.path.exists(cpdir):
                         os.makedirs(cpdir)
-                    self.model.save_model(os.path.join(cpdir,str(model_update_counter)))
+                    self.model.save_model(os.path.join(cpdir,str(update_counter-1)))
 
                 #Sample random state, sample action from e-greedy policy and take step in enviroment
                 state_var = Variable(torch.FloatTensor(cur_state).unsqueeze(0))
@@ -635,7 +635,7 @@ class DQN_Agent():
             qvalues = self.model(state_var)
         while len(self.replay.memory) < self.replay.burn_in:
             ## Action still follows policy with very large exploration
-            action = self.env.action_space.sample()
+            action = self.epsilon_greedy_policy(qvalues, eps_fixed=0.9)
             next_state, reward, done, _ = self.env.step(action)
             if self.env_name == "MountainCar-v0":
                 state = self.normalize(state)

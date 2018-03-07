@@ -149,8 +149,8 @@ class Prioritized_Replay_Memory():
         self.size = memory_size
         self.burn_in = burn_in
         self.tree = SumTree(self.size)
-        self.eta = 0.01
-        self.alpha = 0.90
+        self.eta = 0.0001
+        self.alpha = 1
         self.memory = []
 
     def getPriority(self, error):
@@ -165,7 +165,7 @@ class Prioritized_Replay_Memory():
 
             s = random.uniform(leftleaf, rightleaf)
             (idx, p, data) = self.tree.get(s)
-            batch.append((idx, data + (0,)))
+            batch.append((idx, data + (p,)))
         return batch
     
     # Will be called on the batch update
@@ -225,6 +225,15 @@ class DQN_Agent():
         # Initialize Target Network
         if self.target_update is not None:
             self.target_model = copy.deepcopy(self.model)
+
+        if env_name == "MountainCar-v0":
+            high = self.env.observation_space.high
+            low = self.env.observation_space.low
+            self.mean = (high + low) / 2
+            self.spread = abs(high - low) / 2
+
+    def normalize(self, s):
+        return (s - self.mean) / self.spread
             
     def get_epsilon(self, update_counter):
         eps_strat = self.paramdict['eps_strat']
@@ -239,6 +248,7 @@ class DQN_Agent():
             eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.*update_counter/eps_decay)
         elif eps_strat=='log_decay':
             raise NotImplementedError()
+        return eps_threshold
             
     def epsilon_greedy_policy(self, qvalues, update_counter=None, eps_fixed=None):
         sample = random.random()
@@ -260,7 +270,7 @@ class DQN_Agent():
         if self.env_name == 'CartPole-v0':
             return min(t_counter) > 195
         elif self.env_name == 'MountainCar-v0':
-            return min(t_counter) > -120
+            return min(t_counter) > -110
         elif self.env_name == 'SpaceInvaders-v0':
             return min(t_counter) > 300
 
@@ -429,6 +439,8 @@ class DQN_Agent():
             
         for episode in range(1,self.num_episodes+1):
             cur_state = self.env.reset()
+            if self.env_name == "MountainCar-v0":
+                cur_state = self.normalize(cur_state)
             if self.network == 'conv':
                 cur_state = self.get_frames(cur_state)
             
@@ -452,7 +464,10 @@ class DQN_Agent():
                     else:
                         qvalues = self.model(state_var)
                     action = self.epsilon_greedy_policy(qvalues, update_counter)
+                epsilon = self.get_epsilon(update_counter)
                 next_state, reward, done, _ = self.env.step(action)
+                if self.env_name == "MountainCar-v0":
+                    next_state = self.normalize(next_state)
                 if self.network == 'conv':
                     next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
 
@@ -520,7 +535,7 @@ class DQN_Agent():
                         return
                 if done:
                     if verbose and episode % log_every == 0:
-                        self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f' %(episode,t+1,loss))
+                        self.logger.printboth('Episode %07d : Steps = %03d, Loss = %.2f, epsilon = %.2f' %(episode,t+1,loss, epsilon))
                     break
 
         self.logger.printboth('*'*80)
@@ -549,6 +564,8 @@ class DQN_Agent():
         episode_reward_list = []
         for episode in range(1,num_test_episodes+1):
             cur_state = self.test_env.reset()
+            if self.env_name == "MountainCar-v0":
+                cur_state = self.normalize(cur_state)
             if self.network == 'conv':
                 cur_state = self.get_frames(cur_state)
             episode_reward = 0
@@ -571,6 +588,8 @@ class DQN_Agent():
                 else:
                     action = self.greedy_policy(qvalues)
                 next_state, reward, done, _ = self.test_env.step(action)
+                if self.env_name == "MountainCar-v0":
+                    next_state = self.normalize(next_state)
                 if self.network == 'conv':
                     next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
                 cur_state = next_state
@@ -618,6 +637,9 @@ class DQN_Agent():
             ## Action still follows policy with very large exploration
             action = self.env.action_space.sample()
             next_state, reward, done, _ = self.env.step(action)
+            if self.env_name == "MountainCar-v0":
+                state = self.normalize(state)
+                next_state = self.normalize(next_state)
             if self.network == 'conv':
                 next_state = self.get_frames(cur_frame=next_state, previous_frames=state)
 

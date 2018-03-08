@@ -270,7 +270,7 @@ Hence, if the feature vectors are normalized to norm-1, the function approximati
 \pagebreak[4]
 
 \subsection*{Question 2.b \textbf{[5pts]}}
-State aggregation improves generalization by grouping states together, with one table entry used for each group. Let $\mathcal{X}: s \to x$ be the gouping function that maps a input state $s$ to its group $x$ and usually, the number of groups $|X| \ll |S|$. During training, whenever a state in a group is encountered, the groups' entry and the action $a$ is used to determine the state's value, and when the state is updated, the group's entry is updated. Assume $\mathcal Q$ is still in the the form $Q _w(s, a) = w ^T \phi(s, a)$. Show that a tabular representation with state aggregations is also a special case of TD update~\ref{eq:fapp_qlearn} under certain construction of feature function $\phi$. Give detailed description about your feature function and your proof for equivalence to earn full credits. 
+State aggregation improves generalization by grouping states together, with one table entry used for each group. Let $\mathcal{X}: s \to x$ be the grouping function that maps a input state $s$ to its group $x$ and usually, the number of groups $|X| \ll |S|$. During training, whenever a state in a group is encountered, the groups' entry and the action $a$ is used to determine the state's value, and when the state is updated, the group's entry is updated. Assume $\mathcal Q$ is still in the the form $Q _w(s, a) = w ^T \phi(s, a)$. Show that a tabular representation with state aggregations is also a special case of TD update~\ref{eq:fapp_qlearn} under certain construction of feature function $\phi$. Give detailed description about your feature function and your proof for equivalence to earn full credits.
 
 \noindent
 
@@ -322,7 +322,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 
 \subsection{Linear Q-Network without Experience Replay}
 \subsection*{CartPole-v0}
-\paragraph{Experiment Setting} There were only four weights in the network one corresponding to each variable in the state and a bias. To learn these weights, we used Adam Optimizer with initial learning rate 0.0001 to optimize the loss. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. The model was trained for 500 episodes. Figure \ref{fig:01} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Experiment Setting} There were only four weights in the network one corresponding to each variable in the state and a bias. To learn these weights, we used Adam Optimizer with initial learning rate 0.0001 to optimize the loss. During training, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. Discount factor was set to 0.99 and the model was trained for 500 episodes. Figure \ref{fig:01} shows the performance of the model after different number of weight updates to model.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -330,7 +330,13 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole}
   \label{fig:01}
 \end{figure}
-\paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to the physics of the environment. The Q function with respect to velocity is symmetric and it is not possible for a linear model to trace a symmetric function. The rendering of the model learned shows that even when reward is high, the pole is very unstable and the cart keeps moving to one direction.
+\paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to inability of Optimizer (Gradient Descent) to exactly find the 4 parameters that can solve the environment because although the environment is linearly solvable, it is solvable only for few specific combinations of parameters in linear case which optimizer might not have been able to find. The rendering of the model learned shows that even when reward is high, the pole is very unstable and the cart keeps moving to one direction.\\
+The set of linear equations for Q function which were found to solve the Cartpole-v0 environment are:
+$$ Q(s,0) = -s_3 - 3 \times s_2 $$
+$$ Q(s,1) = s_3 + 3 \times s_2 $$
+where 0,1 are left and right actions and the $s_2$ and $s_3$ denote pole position and pole velocity respectively.
+
+
 
 
 \pagebreak[4]
@@ -358,7 +364,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \subsection{Linear Q-Network with Experience Replay}
 \subsection*{CartPole-v0}
 
-\paragraph{Experiment Setting} Similar to the setting without experience replay, we used Adam Optimizer with initial learning rate 0.0001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience sampling and train the model for 500 episodes. Figure \ref{fig:02} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Experiment Setting} Similar to the setting without experience replay, we used Adam Optimizer with initial learning rate 0.0001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience sampling, set the discount factor to 0.99 and train the model for 500 episodes. Figure \ref{fig:02} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -366,7 +372,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
   \label{fig:02}
 \end{figure}
-\paragraph{Observations} Experience replay does help the model and the model performs better than that without replay in a sense that the learned policy is able to reach a reward of 200. The number of episodes required for training is also reduced because of replay. However the model is still dependent on initialization and is able to reach only upto 100 reward for bad initializations. This model also unlearns the policy and the reward diminishes after training for some more time. To avoid this from happening, we use an early stopping criteria where we stop training if we get a average reward of more than 195 for 5 continuous evaluations. The rendering of the learned policy shows that the cart moves back and forth rapidly and pole is still oscillating a lot hinting that although the reward is 200, the policy learned is still not what it ideally should be.
+\paragraph{Observations} Experience replay does help the model and the model performs better than that without replay in a sense that the learned policy is sometimes able to reach a reward of 200. The number of episodes required for training is also reduced because of replay. However the model is still dependent on initialization and is able to reach only upto 100 reward for bad initializations which is again due to inefficiency of gradient descent. This model also unlearns the policy and the reward diminishes after training for some more time. To avoid this from happening, we use an early stopping criteria where we stop training if we get a average reward of more than 195 for 5 continuous evaluations. The rendering of the learned policy shows that the cart moves back and forth rapidly and pole is still oscillating a lot hinting that although reward is 200, the policy learned is still not what it ideally should be.
 
 \pagebreak[4]
 \subsection*{MountainCar-v0}
@@ -376,7 +382,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \pagebreak[4]
 \subsection{Deep Q-Network}
 \subsection*{CartPole-v0}
-\paragraph{Setting} Since, we find out that linear network in not enough to convincingly solve the CartPole environment due to the non-linearity in the physics of the environment, we try a Multi-layer perceptron with 2 hidden layers to solve the problem. We have 16 units in both layers and we use ReLU as activation function for non-linearity. We use adam optimizer with initial learning rate 0.001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:03} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Setting} Since, we find out that linear network in not enough to convincingly solve the CartPole environment due to the non-linearity in the physics of the environment, we try a Multi-layer perceptron with 2 hidden layers to solve the problem. We have 16 units in both layers and we use ReLU as activation function for non-linearity. We use adam optimizer with initial learning rate 0.001. Again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay and set discount factor to 0.99. Figure \ref{fig:03} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -402,7 +408,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
 \pagebreak[4]
 \subsection{Duelling Deep Q-Network}
 \subsection*{CartPole-v0}
-\paragraph{Setting} For the duelling dqn, we use a two layer MLP woith 16 units each as the shared architecture and then use tow MLPs of 1 layer with 16 units to compute advantage and value function. Similar to MLP, we use Adam Optimizer with initial learning rate of 0.001 and again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. We use a batch size of 32 for experience replay. Figure \ref{fig:05} shows the performance of the model after different number of weight updates to model during training.
+\paragraph{Setting} For the duelling dqn, we use a two layer MLP woith 16 units each as the shared architecture and then use tow MLPs of 1 layer with 16 units to compute advantage and value function. Similar to MLP, we use Adam Optimizer with initial learning rate of 0.001 and again, we use an epsilon greedy policy and decay the value of $\epsilon$ from 0.5 to 0.05 linearly over 1 million weight updates. Discount factor was set to 0.99 and We use a batch size of 32 for experience replay. Figure \ref{fig:05} shows the performance of the model after different number of weight updates to model during training.
 \begin{figure}[h]
   \centering
   \vspace{-5mm}
@@ -444,7 +450,9 @@ MountainCar   & MLP    & Prioritized & DuellingDQN &           &          \\ \hl
 \end{tabular}
 \caption{Test performance of different algorithms in different environments. Here the column 'Reward' is the average cumulative reward over 100 test episodes and 'Train Episodes' is the number of episodes required for convergence.}
 \end{table}
+% Need to comment on the results in the table
 
+% Need to put seeds for Mountain Car here
 \paragraph{Reproducibility} We have set seeds to ensure that all experiments and results are fully reproducible. In the code, the seed can be set using "--seed" argument during training. The seeds for different experiments in order of their position in table are 91, 91, 9, 1, 0, X, X, X, X, X, 0, X, X. During test, all seeds are set to 0 by default and no argument needs to be passed.
 
 \pagebreak[4]

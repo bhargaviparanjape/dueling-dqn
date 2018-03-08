@@ -331,7 +331,7 @@ At convergence, $Q_w^{t+1}(s, a)$ should be equal to $Q_w^{t}(s, a)$ which impli
   \label{fig:01}
 \end{figure}
 \paragraph{Observations} We found that the linear network is not able to solve CartPole environment with confidence. It is heavily dependent on initialization and with a bad initialization gets easily stuck in a local optima. Even when initialization is good, it is unable to give a consistent average reward of 200 and the performance oscillates a lot. Additionally, the model also unlearns the policy and the reward goes below 100 after training for some more time. We hypothesize that this might be due to inability of Optimizer (Gradient Descent) to exactly find the 4 parameters that can solve the environment because although the environment is linearly solvable, it is solvable only for few specific combinations of parameters in linear case which optimizer might not have been able to find. The rendering of the model learned shows that even when reward is high, the pole is very unstable and the cart keeps moving to one direction.\\
-The set of linear equations for Q function which were found to solve the Cartpole-v0 environment are:
+The set of linear equations for Q function which were found to solve the Cartpole-v0 environment are \cite{linearcart}:
 $$ Q(s,0) = -s_3 - 3 \times s_2 $$
 $$ Q(s,1) = s_3 + 3 \times s_2 $$
 where 0,1 are left and right actions and the $s_2$ and $s_3$ denote pole position and pole velocity respectively.
@@ -387,7 +387,7 @@ where 0,1 are left and right actions and the $s_2$ and $s_3$ denote pole positio
   \centering
   \vspace{-5mm}
   \includegraphics[width=0.8\linewidth]{figures/reward_plot_04.png}
-  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \caption{Performance of Deep Q-Network on CartPole with Experience Sampling}
   \label{fig:03}
 \end{figure}
 \paragraph{Observations} We find that Multi-layer Perceptron is able to fully solve the CartPole environment and able to obtain an average reward of 200 consistently irrespective of initialization. The average reward obtained is also stable for a long time and does not unlearn quickly as the linear ones do. Learning however takes more time as the number of parameters are more and as a reason, a higher learning rate (0.001) was used. Again, we use a stopping criteria to prevent the model from overfitting because the risk of overfitting is high due to higher number of parameters as compared to linear model. We stop training when we get a reward of 195 or more for 5 continuous evaluations. Finally, by examining the recording of the learned policy, we find that it is better than linear in the sense that pole does not oscillate and almost maintains its position. However, a caveat in the policy learned is that the cart tends to move in one direction either left or right in order to balance the pole.
@@ -398,7 +398,7 @@ where 0,1 are left and right actions and the $s_2$ and $s_3$ denote pole positio
   \centering
   \vspace{-5mm}
   \includegraphics[width=0.8\linewidth]{figures/reward_plot_03.png}
-  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \caption{Performance of Deep Q-Network on CartPole without Experience Sampling}
   \label{fig:04}
 \end{figure}
 
@@ -413,7 +413,7 @@ where 0,1 are left and right actions and the $s_2$ and $s_3$ denote pole positio
   \centering
   \vspace{-5mm}
   \includegraphics[width=0.8\linewidth]{figures/reward_plot_05.png}
-  \caption{Performance of Linear Q-Network on CartPole with Experience Sampling}
+  \caption{Performance of Duelling DQN on CartPole with Experience Sampling}
   \label{fig:05}
 \end{figure}
 \paragraph{Observations} We find that duelling dqn takes lesser number of episodes to learn and is as good as dqn in terms of reward stability. One interesting thing to note was that number of updates was higher than dqn even though episodes were less. Examining the plot, we find out that duelling dqn starts to learn very quickly and the reward go up to 193 just after first 5000 weight updates. Another interesting observation was the recording of the policy learned by duelling dqn. It was most stable of all the policies learned so far. The car position was also stable and so was the pole's angle. There were very small movements and the actions perfectly balanced the pole. 

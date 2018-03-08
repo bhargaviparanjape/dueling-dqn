@@ -192,7 +192,10 @@ class DQN_Agent():
         self.test_env = gym.make(env_name)
         self.test_env.seed(seed)
         self.use_cuda = use_cuda
-        self.loss_function = nn.MSELoss()
+        if paramdict["loss_function"] is not None:
+            self.loss_function = nn.SmoothL1Loss()
+        else:
+            self.loss_function = nn.MSELoss()
         self.exp_replay = exp_replay
         self.agent = agent
         self.network = network
@@ -233,7 +236,7 @@ class DQN_Agent():
             self.spread = abs(high - low) / 2
 
     def normalize(self, s):
-        return (s - self.mean) / self.spread
+        return s #(s - self.mean) / self.spread
             
     def get_epsilon(self, update_counter):
         eps_strat = self.paramdict['eps_strat']
@@ -247,6 +250,8 @@ class DQN_Agent():
             eps_decay= eps_decay/100
             eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.*update_counter/eps_decay)
         elif eps_strat=='log_decay':
+            # eps_threshold = eps_end + (eps_start - eps_end)
+            # max(self.epsilon_min, min(self.epsilon, 1.0 - math.log10((t + 1) * self.epsilon_decay)))
             raise NotImplementedError()
         return eps_threshold
             
@@ -302,7 +307,11 @@ class DQN_Agent():
 
         nqvalues = nqvalues.max(1)[0]
         nqvalues.volatile = False
-        
+
+        ## extra condition to differentiate termination at the bottom vs termination at the top
+        if self.env_name == "MountainCar-v0" and done == 1 and next_state[0] <= 0.5:
+            done = 0
+
         target = reward + (1-done)* self.gamma* nqvalues
         if self.use_cuda and torch.cuda.is_available():
             target = target.cuda()
@@ -364,9 +373,13 @@ class DQN_Agent():
         nqvalues.volatile = False
 
         for i in range(batch_size):
-            target[i] = batch.reward[i] + (1 - batch.is_terminal[i])* self.gamma* nqvalues[i]
+            done = batch.is_terminal[i]
+            if self.env_name == "MountainCar-v0" and done == 1 and batch.next_state[i][0] <= 0.5:
+                done = 0
+            target[i] = batch.reward[i] + (1 - done)* self.gamma* nqvalues[i]
         if self.use_cuda and torch.cuda.is_available():
             target = target.cuda()
+
 
         ## If using priority queue , update priorities
         if self.exp_replay == "priority":
@@ -379,7 +392,7 @@ class DQN_Agent():
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        return loss/batch_size
+        return loss
     
     def get_frames(self, cur_frame, previous_frames=None):
         num_frames = self.paramdict['num_frames'] 

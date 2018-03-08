@@ -266,7 +266,7 @@ class DQN_Agent():
         elif self.env_name == 'MountainCar-v0':
             return min(t_counter) > -120
         elif self.env_name == 'SpaceInvaders-v0':
-            return min(t_counter) > 300
+            return min(t_counter) > 400
 
     def set_logger(self, model_location, logfile, trial=False):
         self.logger = Logger(os.path.join(model_location,logfile), trial=trial)
@@ -455,7 +455,7 @@ class DQN_Agent():
                                   (avalues - torch.mean(avalues).repeat(1,self.env.action_space.n))
                     else:
                         qvalues = self.model(state_var)
-                    action = self.epsilon_greedy_policy(qvalues, update_counter)
+                    action = self.epsilon_greedy_policy(qvalues, model_update_counter+1)
                 next_state, reward, done, _ = self.env.step(action)
                 if self.network == 'conv':
                     next_state = self.get_frames(cur_frame=next_state, previous_frames=cur_state)
@@ -504,7 +504,11 @@ class DQN_Agent():
                     self.target_model.load_state_dict(self.model.state_dict())
 
                 # Evaluate on 20 episodes, Bookkeeping
-                if model_update_counter% eval_every == 0:
+                if (model_update_counter * model_update_frequency + \
+                    ((update_counter-1) % model_update_frequency)) % (eval_every*model_update_frequency) == 0:
+                    
+                    assert (model_update_counter*model_update_frequency == (update_counter-1))
+                    
                     avg_reward = self.test(num_test_episodes = 20, evaluate = True, verbose= False, 
                                            num_updates = model_update_counter/eval_every)
                     t_counter.append(avg_reward)

@@ -3,6 +3,11 @@ from collections import defaultdict
 def get_parameters(env, network, replay, agent, run='0'):
     paramdict = defaultdict(lambda: None)
 
+    ##############################  MOUNTAIN CAR  ##########################################
+
+
+
+    ## A model ran with these settings and produced results at seed 91, do not change !!
     if env=='MountainCar-v0' and network=='linear' and replay=='noexp' and agent=='dqn':
         paramdict['lrate'] = 0.0001
         paramdict['gamma'] = 1

@@ -45,8 +45,11 @@ class baseQNetwork(nn.Module):
     def forward(self):
         pass
 
-    def load_model(self, model_file):
-        self.load_state_dict(torch.load(model_file))
+    def load_model(self, model_file, location='cpu'):
+        if location=='cpu':
+            self.load_state_dict(torch.load(model_file, map_location=lambda storage, loc: storage))
+        else:
+            self.load_state_dict(torch.load(model_file))
 
     def save_model(self, file_name):
         torch.save(self.state_dict(), file_name)
@@ -277,7 +280,7 @@ class DQN_Agent():
         elif self.env_name == 'MountainCar-v0':
             return min(t_counter) > -110
         elif self.env_name == 'SpaceInvaders-v0':
-            return min(t_counter) > 300
+            return min(t_counter) > 400
 
     def set_logger(self, model_location, logfile, trial=False):
         self.logger = Logger(os.path.join(model_location,logfile), trial=trial)
@@ -476,8 +479,9 @@ class DQN_Agent():
                                   (avalues - torch.mean(avalues).repeat(1,self.env.action_space.n))
                     else:
                         qvalues = self.model(state_var)
-                    action = self.epsilon_greedy_policy(qvalues, update_counter)
-                epsilon = self.get_epsilon(update_counter)
+
+                    action = self.epsilon_greedy_policy(qvalues, model_update_counter+1)
+                    epsilon = self.get_epsilon(model_update_counter+1)
                 next_state, reward, done, _ = self.env.step(action)
                 if self.env_name == "MountainCar-v0":
                     next_state = self.normalize(next_state)
@@ -528,7 +532,11 @@ class DQN_Agent():
                     self.target_model.load_state_dict(self.model.state_dict())
 
                 # Evaluate on 20 episodes, Bookkeeping
-                if model_update_counter% eval_every == 0:
+                if (model_update_counter * model_update_frequency + \
+                    ((update_counter-1) % model_update_frequency)) % (eval_every*model_update_frequency) == 0:
+                    
+                    assert (model_update_counter*model_update_frequency == (update_counter-1))
+                    
                     avg_reward = self.test(num_test_episodes = 20, evaluate = True, verbose= False, 
                                            num_updates = model_update_counter/eval_every)
                     t_counter.append(avg_reward)
@@ -567,7 +575,9 @@ class DQN_Agent():
         if not evaluate:
             if self.use_cuda and torch.cuda.is_available():
                 self.model.cuda()
-            self.model.load_model(model_load)
+                self.model.load_model(model_load)
+            else:
+                self.model.load_model(model_load, location='cpu')
 
         if render:
             model_load_loc, model_load_file = os.path.split(model_load)
@@ -753,7 +763,7 @@ def main(args):
             dqn_agent.test(model_load, num_test_episodes=1, render=True)
         else:
             dqn_agent.set_logger(model_location=model_load_loc, logfile= model_load_file + '_testlogs.txt')
-            dqn_agent.test(model_load)
+            dqn_agent.test(model_load, num_test_episodes = 100)
 
 if __name__ == '__main__':
     main(sys.argv)
